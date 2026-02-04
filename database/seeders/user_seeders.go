@@ -52,9 +52,9 @@ func SeedUsersFromExcel(path string) error {
 			continue
 		}
 
-		fmt.Println("✅ inserted:", user.Username)
+		fmt.Println("inserted:", user.Username)
 	}
 
-	fmt.Println("🎉 Users seeded from Excel selesai")
+	fmt.Println("Users seeded from Excel selesai")
 	return nil
 }
