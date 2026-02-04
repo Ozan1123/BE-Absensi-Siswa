@@ -12,7 +12,7 @@ import (
 //bikin type untuk DB
 var DB *gorm.DB
 
-func ConnectDB() {
+func ConnectDB() error {
 	//ambil config dari AppConfig
 	cfg := config.AppConfig
 
@@ -34,4 +34,5 @@ func ConnectDB() {
 	DB = db
 
 	fmt.Println("👌 CONNECT TO DATABASE COMPLETED !")
+	return nil
 }

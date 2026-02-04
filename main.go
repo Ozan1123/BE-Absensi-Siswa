@@ -5,6 +5,7 @@ import (
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/config"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/database/seeders"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/routes"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -16,6 +17,8 @@ func main() {
 
 	//connect to database
 	database.ConnectDB()
+	//to running seeders
+	seeders.RunSeed()
 	// Setup Routes
 	app := fiber.New()
 
