@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/dto/requests"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/mappers"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/utils"
 	"github.com/gofiber/fiber/v2"
@@ -33,8 +34,15 @@ func Login(c *fiber.Ctx) error {
 		"Message" : "success Login",
 		"access_token" : access_token,
 	})
+}
 
+func Me(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(int64)
 
+	var user models.Users
+	if err := database.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error" : "not found user"})
+	}
 
-
+	return c.Status(200).JSON(fiber.Map{"Message" : "User found", "data" : mappers.ToUserResponse(user)})
 }

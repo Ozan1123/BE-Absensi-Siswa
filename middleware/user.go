@@ -18,7 +18,7 @@ func ProtectedRoute(c *fiber.Ctx) error {
 		return c.Status(401).JSON(fiber.Map{"error": "invalid fomating header"})
 	}
 
-	tokenStr := strings.TrimPrefix(header, "Bearer")
+	tokenStr := strings.TrimPrefix(header, "Bearer ")
 
 	token, err := utils.VerifyToken(tokenStr)
 	if err != nil || !token.Valid {
