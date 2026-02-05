@@ -11,68 +11,102 @@ import (
 func ProtectedRoute(c *fiber.Ctx) error {
 	header := c.Get("Authorization")
 	if header == "" {
-		return c.Status(401).JSON(fiber.Map{"error": "missing header"})
+		return c.Status(401).JSON(fiber.Map{
+			"error": "missing authorization header",
+		})
 	}
 
 	if !strings.HasPrefix(header, "Bearer ") {
-		return c.Status(401).JSON(fiber.Map{"error": "invalid fomating header"})
+		return c.Status(401).JSON(fiber.Map{
+			"error": "invalid authorization format",
+		})
 	}
 
 	tokenStr := strings.TrimPrefix(header, "Bearer ")
 
 	token, err := utils.VerifyToken(tokenStr)
 	if err != nil || !token.Valid {
-		return c.Status(401).JSON(fiber.Map{"error": "invalid jwt"})
+		return c.Status(401).JSON(fiber.Map{
+			"error": "invalid jwt token",
+		})
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return c.Status(401).JSON(fiber.Map{"error": "invalid claims"})
+		return c.Status(401).JSON(fiber.Map{
+			"error": "invalid jwt claims",
+		})
 	}
 
-	userID, ok := claims["user_id"].(float64)
+	role, ok := claims["role"].(string)
 	if !ok {
-		return c.Status(401).JSON(fiber.Map{"error": "invalid claims"})
+		return c.Status(401).JSON(fiber.Map{
+			"error": "invalid role claim",
+		})
 	}
 
-	c.Locals("user_id", int64(userID))
+	if role != "siswa" {
+		return c.Status(403).JSON(fiber.Map{
+			"error": "kamu bukan siswa",
+		})
+	}
+
+	// ✅ ambil user_id
+	userIDFloat, ok := claims["user_id"].(float64)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{
+			"error": "invalid user_id claim",
+		})
+	}
+
+	userID := int64(userIDFloat)
+
+	c.Locals("user_id", userID)
+	c.Locals("role", role)
+
 	return c.Next()
 }
-
-
 
 func AdminRoute(c *fiber.Ctx) error {
 	header := c.Get("Authorization")
 	if header == "" {
-		return c.Status(401).JSON(fiber.Map{"error": "missing header"})
+		return c.Status(401).JSON(fiber.Map{"error": "missing authorization header"})
 	}
 
 	if !strings.HasPrefix(header, "Bearer ") {
-		return c.Status(401).JSON(fiber.Map{"error": "invalid fomating header"})
+		return c.Status(401).JSON(fiber.Map{"error": "invalid authorization format"})
 	}
 
 	tokenStr := strings.TrimPrefix(header, "Bearer ")
 
 	token, err := utils.VerifyToken(tokenStr)
 	if err != nil || !token.Valid {
-		return c.Status(401).JSON(fiber.Map{"error": "invalid jwt"})
+		return c.Status(401).JSON(fiber.Map{"error": "invalid jwt token"})
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return c.Status(401).JSON(fiber.Map{"error": "invalid claims"})
+		return c.Status(401).JSON(fiber.Map{"error": "invalid jwt claims"})
 	}
 
-	role := claims["role"]
-	if role != "admin" {
-		return c.Status(401).JSON(fiber.Map{"error" : "you not admin"})
-	}
-
-	userID, ok := claims["user_id"].(float64)
+	role, ok := claims["role"].(string)
 	if !ok {
-		return c.Status(401).JSON(fiber.Map{"error": "invalid claims"})
+		return c.Status(401).JSON(fiber.Map{"error": "invalid role claim"})
 	}
 
-	c.Locals("user_id", int64(userID))
+	if role != "guru" {
+		return c.Status(403).JSON(fiber.Map{"error": "kamu bukan guru"})
+	}
+
+	userIDFloat, ok := claims["user_id"].(float64)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{"error": "invalid user_id claim"})
+	}
+
+	userID := int64(userIDFloat)
+
+	c.Locals("user_id", userID)
+	c.Locals("role", role)
+
 	return c.Next()
 }

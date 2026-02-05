@@ -12,37 +12,65 @@ import (
 )
 
 func CreateToken(c *fiber.Ctx) error {
-	adminID := c.Locals("user_id").(int64)
+	adminID, ok := c.Locals("user_id").(int64)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	role := c.Locals("role")
+	if role != "guru" {
+		return c.Status(403).JSON(fiber.Map{"error": "Hanya guru yang bisa membuat token"})
+	}
 
 	var req requests.TokenReq
-	if err := c.BodyParser(&req);err != nil {
-		return c.Status(400).JSON(fiber.Map{"error" : "invalid payload"})
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Muatan tidak valid"})
 	}
 
 	token, err := utils.CreateToken(adminID, req.Duration, req.LateAfter)
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error" : err})
+		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
 	}
 
-	return c.Status(201).JSON(fiber.Map{"Message" : "Success to create Token !", "data" : mappers.ToTokenResponse(token)})
+	return c.Status(201).JSON(fiber.Map{
+		"message": "Token berhasil dibuat",
+		"data":    mappers.ToTokenResponse(token),
+	})
 }
 
-
 func SubmitToken(c *fiber.Ctx) error {
-	userID := c.Locals("user_id").(int64)
+	userID, ok := c.Locals("user_id").(int64)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	role := c.Locals("role")
+	if role != "siswa" {
+		return c.Status(403).JSON(fiber.Map{"error": "Hanya murid yang bisa mengisi token"})
+	}
 
 	var req requests.SubmitToken
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error" : "invalid payload"})
+		return c.Status(400).JSON(fiber.Map{"error": "Muatan tidak valid"})
 	}
 
 	token, err := utils.VerifyTokenCode(req.TokenCode)
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error" : "token invalid or expired !"})
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	var count int64
+	database.DB.Model(&models.AttedanceLogs{}).
+		Where("user_id = ? AND token_id = ?", userID, token.ID).
+		Count(&count)
+	
+	if count > 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Kamu sudah berhasil melakukan absensi",
+		})
 	}
 
 	status := "present"
-
 	if time.Now().After(token.LateAfter) {
 		status = "late"
 	}
@@ -55,8 +83,11 @@ func SubmitToken(c *fiber.Ctx) error {
 	}
 
 	if err := database.DB.Create(&log).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"error"  : err.Error()})
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.Status(200).JSON(fiber.Map{"Message" : "Success To Absen"})
+	return c.Status(200).JSON(fiber.Map{
+		"message": "Success To Absen",
+		"status" : status,
+	})
 }

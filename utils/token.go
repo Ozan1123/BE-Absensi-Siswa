@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"math/rand"
 	"time"
 
@@ -8,10 +9,10 @@ import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
 )
 
-const charset = "QMBLO01386"
+const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
 
-func RandomString(n int) string {
-	b := make([]byte, n)
+func RandomString(lenght int) string {
+	b := make([]byte, lenght)
 	for i := range b {
 		b[i] = charset[rand.Intn(len(charset))]
 	}
@@ -19,12 +20,29 @@ func RandomString(n int) string {
 }
 
 func CreateToken(adminID int64, durationMinutes int, lateAfter int) (*models.AttedanceTokens, error) {
+	var tokenCode string
+
+	for {
+		code := RandomString(10)
+
+		var count int64
+		database.DB.Model(&models.AttedanceTokens{}).
+			Where("token_code = ?", code).
+			Count(&count)
+		
+		if count == 0 {
+			tokenCode = code
+			break
+		}
+	}
+	
+	
 	token := models.AttedanceTokens{
-		TokenCode:  RandomString(10),
+		TokenCode:  tokenCode,
 		CreatedBy:  adminID,
 		IsActive:   true,
 		LateAfter: time.Now().Add(time.Minute * time.Duration(lateAfter)),
-		ValidUntil: time.Now().Add(time.Minute * time.Duration(durationMinutes)),
+		ValidUntil: time.Now().Add(time.Minute * time.Duration(durationMinutes),),
 	}
 
 	if err := database.DB.Create(&token).Error; err != nil {
@@ -38,6 +56,7 @@ func CreateToken(adminID int64, durationMinutes int, lateAfter int) (*models.Att
 	return &token, nil
 }
 
+
 func VerifyTokenCode(input string) (*models.AttedanceTokens, error) {
 	var token models.AttedanceTokens
 
@@ -45,7 +64,7 @@ func VerifyTokenCode(input string) (*models.AttedanceTokens, error) {
 		Where("token_code = ? AND is_active = ?", input, true).
 		First(&token).Error
 	if err != nil {
-		return  nil, err
+		return  nil, errors.New("Token tidak ditemukan!")
 	}
 
 	// cek expired
@@ -58,7 +77,7 @@ func VerifyTokenCode(input string) (*models.AttedanceTokens, error) {
 			return  nil, err
 		}
 
-		return  nil, err 
+		return  nil, errors.New("Token sudah expired!")
 	}
 
 	return &token, nil

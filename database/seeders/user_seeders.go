@@ -34,7 +34,7 @@ func SeedUsersFromExcel(path string) error {
 			FullName:   row[1],
 			Username:   row[2],
 			Password:   string(passwordHash),
-			Role:       "student",
+			Role:       "siswa",
 			ClassGroup: row[4],
 		}
 
