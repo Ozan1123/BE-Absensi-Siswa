@@ -11,7 +11,7 @@ func GetAllLogs(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(int64)
 
 	var logs []models.AttedanceLogs
-	if err := database.DB.Preload("User").Where("user_id = ?", userID).First(&logs).Error; err != nil {
+	if err := database.DB.Preload("User").Where("user_id = ?", userID).Find(&logs).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error" : "not found user logs"})
 	}
 

@@ -70,9 +70,9 @@ func SubmitToken(c *fiber.Ctx) error {
 		})
 	}
 
-	status := "present"
+	status := "hadir"
 	if time.Now().After(token.LateAfter) {
-		status = "late"
+		status = "telat"
 	}
 
 	log := models.AttedanceLogs{
