@@ -9,4 +9,6 @@ type Users struct {
 	Password   string
 	Role       string
 	ClassGroup string
+
+	AttedanceTokens []AttedanceTokens `gorm:"foreignKey:CreatedBy"`
 }

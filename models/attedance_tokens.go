@@ -8,7 +8,7 @@ type AttedanceTokens struct {
 	CreatedBy  int64
 	IsActive   bool
 	ValidUntil time.Time
-	CreatedAt time.Time
+	CreatedAt  time.Time
 
-	User Users `gorm:"foreginKey:CreatedBy;references:ID"`
+	User Users `gorm:"foreignKey:CreatedBy;references:ID"`
 }

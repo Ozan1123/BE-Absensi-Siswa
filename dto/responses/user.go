@@ -8,3 +8,8 @@ type UserRes struct {
 	Role       string `json:"role"`
 	ClassGroup string `json:"class_group"`
 }
+
+type UserMini struct {
+	ID int64 `json:"id"`
+	FullName string `json:"full_name"`
+}

@@ -9,5 +9,7 @@ import (
 func SetupRouteAttedanceToken(api fiber.Router) {
 	token := api.Group("/token")
 
-	token.Get("/create", middleware.AdminRoute, handlers.Create)
+	token.Post("/create", middleware.AdminRoute, handlers.CreateToken)
+
+	token.Post("/absen", middleware.ProtectedRoute, handlers.SubmitToken)
 }

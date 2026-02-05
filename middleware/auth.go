@@ -39,6 +39,8 @@ func ProtectedRoute(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+
+
 func AdminRoute(c *fiber.Ctx) error {
 	header := c.Get("Authorization")
 	if header == "" {
