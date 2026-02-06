@@ -23,7 +23,7 @@ func CreateToken(adminID int64, durationMinutes int, lateAfter int) (*models.Att
 	var tokenCode string
 
 	for {
-		code := RandomString(10)
+		code := RandomString(6)
 
 		var count int64
 		database.DB.Model(&models.AttedanceTokens{}).
