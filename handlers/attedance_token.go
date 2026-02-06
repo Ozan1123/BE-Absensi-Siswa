@@ -38,6 +38,30 @@ func CreateToken(c *fiber.Ctx) error {
 	})
 }
 
+func CreateTokenDefault(c *fiber.Ctx) error {
+	adminID, ok := c.Locals("user_id").(int64)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	role := c.Locals("role")
+	if role != "guru" {
+		return c.Status(403).JSON(fiber.Map{"error": "Hanya guru yang bisa membuat token"})
+	}
+
+	token, err := utils.CreateToken(adminID, 20, 15)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
+	}
+
+	return c.Status(201).JSON(fiber.Map{
+		"message": "Token berhasil dibuat",
+		"data":    mappers.ToTokenResponse(token),
+	})
+}
+
+
+
 func SubmitToken(c *fiber.Ctx) error {
 	userID, ok := c.Locals("user_id").(int64)
 	if !ok {
