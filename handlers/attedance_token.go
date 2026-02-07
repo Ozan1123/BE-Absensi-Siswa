@@ -90,7 +90,7 @@ func SubmitToken(c *fiber.Ctx) error {
 	
 	if count > 0 {
 		return c.Status(400).JSON(fiber.Map{
-			"error": "Kamu sudah berhasil melakukan absensi",
+			"error": "Kamu sudah  melakukan absensi",
 		})
 	}
 
