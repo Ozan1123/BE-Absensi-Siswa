@@ -22,11 +22,19 @@ func main() {
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:5173,https://www.reihan.biz.id", // url yang boleh akses
-		AllowMethods: "GET,POST,PUT,DELETE,PATCH,OPTIONS",// method yang boleh dilakukan
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization", //content-type header wajib
-		AllowCredentials: true, //jika pake jwt
+		AllowOriginsFunc: func(origin string) bool {
+			switch origin {
+			case "http://localhost:3000",
+				"https://www.reihan.biz.id":
+				return true
+			}
+			return false
+		},
+		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,OPTIONS",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowCredentials: true,
 	}))
+
 	routes.SetupRoutes(app)
 
 	//running project
