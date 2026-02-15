@@ -11,4 +11,5 @@ func SetupRoutes(app *fiber.App) {
 	SetupRouteAttedanceToken(api)
 	SetupRouteLogs(api)
 	SetupRouteDashboard(api)
+	SetupRouteExport(api)
 }
