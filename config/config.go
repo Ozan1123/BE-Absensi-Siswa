@@ -29,11 +29,11 @@ func LoadEnv() {
 
 	//instalasi untuk config
 	AppConfig = &Config{
-		Port: os.Getenv("PORT"),
-		DBName: os.Getenv("DB_NAME"),
+		Port:       os.Getenv("PORT"),
+		DBName:     os.Getenv("DB_NAME"),
 		DBPassword: os.Getenv("DB_PASSWORD"),
-		DBUser: os.Getenv("DB_USER"),
-		DBHost: os.Getenv("DB_HOST"),
-		DBPort: os.Getenv("DB_PORT"),
+		DBUser:     os.Getenv("DB_USER"),
+		DBHost:     os.Getenv("DB_HOST"),
+		DBPort:     os.Getenv("DB_PORT"),
 	}
 }
