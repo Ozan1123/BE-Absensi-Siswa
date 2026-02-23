@@ -11,4 +11,5 @@ type Users struct {
 	ClassGroup string
 
 	AttedanceTokens []AttedanceTokens `gorm:"foreignKey:CreatedBy"`
+	AttedanceLogs   []AttedanceLogs   `gorm:"foreignKey:UserID"`
 }

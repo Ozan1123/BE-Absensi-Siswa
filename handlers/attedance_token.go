@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"time"
-
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/dto/requests"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/mappers"
@@ -60,8 +58,6 @@ func CreateTokenDefault(c *fiber.Ctx) error {
 	})
 }
 
-
-
 func SubmitToken(c *fiber.Ctx) error {
 	userID, ok := c.Locals("user_id").(int64)
 	if !ok {
@@ -87,15 +83,17 @@ func SubmitToken(c *fiber.Ctx) error {
 	database.DB.Model(&models.AttedanceLogs{}).
 		Where("user_id = ? AND token_id = ?", userID, token.ID).
 		Count(&count)
-	
+
 	if count > 0 {
 		return c.Status(400).JSON(fiber.Map{
 			"error": "Kamu sudah  melakukan absensi",
 		})
 	}
 
+	now := utils.Now()
+
 	status := "hadir"
-	if time.Now().After(token.LateAfter) {
+	if now.After(token.LateAfter) {
 		status = "telat"
 	}
 
@@ -103,7 +101,7 @@ func SubmitToken(c *fiber.Ctx) error {
 		UserID:      userID,
 		TokenID:     token.ID,
 		Status:      status,
-		ClockInTime: time.Now(),
+		ClockInTime: now,
 	}
 
 	if err := database.DB.Create(&log).Error; err != nil {
@@ -112,6 +110,6 @@ func SubmitToken(c *fiber.Ctx) error {
 
 	return c.Status(200).JSON(fiber.Map{
 		"message": "Success To Absen",
-		"status" : status,
+		"status":  status,
 	})
 }

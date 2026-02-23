@@ -5,7 +5,6 @@ import (
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/config"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
-	"github.com/KicauOrgspark/BE-Absensi-Siswa/database/seeders"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/routes"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
 	"github.com/gofiber/fiber/v2"
@@ -20,7 +19,7 @@ func main() {
 	database.ConnectDB()
 
 	//to running seeders
-	seeders.RunSeed()
+	// seeders.RunSeed()
 
 	//start token cleaner service
 	services.StartTokenCleaner()
