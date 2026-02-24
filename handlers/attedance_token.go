@@ -5,6 +5,7 @@ import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/dto/requests"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/mappers"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/utils"
 	"github.com/gofiber/fiber/v2"
 )
@@ -74,7 +75,8 @@ func SubmitToken(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Muatan tidak valid"})
 	}
 
-	token, err := utils.VerifyTokenCode(req.TokenCode)
+	// Verifikasi token — sekarang token expired tetap dikembalikan (tidak ditolak)
+	token, isExpired, err := utils.VerifyTokenCode(req.TokenCode)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -90,12 +92,10 @@ func SubmitToken(c *fiber.Ctx) error {
 		})
 	}
 
-	now := utils.Now()
+	// Tentukan status via service layer (clean architecture)
+	status := services.DetermineAttendanceStatus(token, isExpired)
 
-	status := "hadir"
-	if now.After(token.LateAfter) {
-		status = "telat"
-	}
+	now := utils.Now()
 
 	log := models.AttedanceLogs{
 		UserID:      userID,
