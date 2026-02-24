@@ -64,28 +64,25 @@ func CreateToken(adminID int64, durationMinutes int, lateAfter int) (*models.Att
 	return &token, nil
 }
 
-func VerifyTokenCode(input string) (*models.AttedanceTokens, error) {
-	var token models.AttedanceTokens
+func VerifyTokenCode(input string) (token *models.AttedanceTokens, isExpired bool, err error) {
+	var t models.AttedanceTokens
 
-	err := database.DB.
+	e := database.DB.
 		Where("token_code = ? AND is_active = ?", input, true).
-		First(&token).Error
-	if err != nil {
-		return nil, errors.New("Token tidak ditemukan!")
+		First(&t).Error
+	if e != nil {
+		return nil, false, errors.New("Token tidak ditemukan!")
 	}
 
-	// cek expired
-	if Now().After(token.ValidUntil) {
-		err := database.DB.
+	// cek expired — tetap return token, tapi tandai isExpired = true
+	if Now().After(t.ValidUntil) {
+		database.DB.
 			Model(&models.AttedanceTokens{}).
-			Where("id = ?", token.ID).
-			Update("is_active", false).Error
-		if err != nil {
-			return nil, err
-		}
+			Where("id = ?", t.ID).
+			Update("is_active", false)
 
-		return nil, errors.New("Token sudah expired!")
+		return &t, true, nil
 	}
 
-	return &token, nil
+	return &t, false, nil
 }
