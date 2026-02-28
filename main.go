@@ -27,7 +27,7 @@ func main() {
 	// Setup Routes
 	app := fiber.New()
 
-	app.Use(cors.New(cors.Config{AllowOrigins: "http://localhost:3000,https://www.reihan.biz.id",
+	app.Use(cors.New(cors.Config{AllowOrigins: "http://localhost:5713,https://www.reihan.biz.id",
 		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,OPTIONS",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true, //jika pake jwt
