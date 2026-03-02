@@ -19,7 +19,7 @@ func main() {
 	database.ConnectDB()
 
 	//to running seeders
-	// seeders.RunSeed()
+	// seeders.RunSeed()	
 
 	//start token cleaner service
 	services.StartTokenCleaner()
