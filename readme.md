@@ -5,3 +5,8 @@
 ================================================================================================================= To Running (UP) Migration (Example Mysql) : migrate -database "mysql://db_user:db_password@tcp(127.0.0.1:3306)/db_name" -path database/migration up
 
 ================================================================================================================== To Running (DOWN) Migration : migrate -database "mysql://db_user:db_password@tcp(127.0.0.1:3306)/db_name" -path database/migration down
+
+
+
+To Init Swag : swag init
+To Swag Generate  : swag init --parseDependency --parseInternal 

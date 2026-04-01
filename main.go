@@ -1,3 +1,9 @@
+// @title My API
+// @version 1.0
+// @description Ini adalah dokumentasi API gue
+// @host www.reihan.biz.id
+// @BasePath /api/v1
+
 package main
 
 import (
@@ -9,6 +15,8 @@ import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+   fiberSwagger "github.com/swaggo/fiber-swagger"
+    _ "github.com/KicauOrgspark/BE-Absensi-Siswa/docs" // WAJIB sesuai module
 )
 
 func main() {
@@ -26,6 +34,8 @@ func main() {
 
 	// Setup Routes
 	app := fiber.New()
+
+	 app.Get("/swagger/*", fiberSwagger.WrapHandler)
 
 	app.Use(cors.New(cors.Config{AllowOrigins: "http://localhost:5713,https://www.reihan.biz.id",
 		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,OPTIONS",

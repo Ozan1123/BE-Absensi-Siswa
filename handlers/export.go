@@ -8,6 +8,20 @@ import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/utils"
 )
 
+
+// ExportAttendance godoc
+// @Summary Export data absensi ke Excel
+// @Description Mengexport data absensi berdasarkan kelas, jurusan, dan tanggal dalam bentuk file Excel
+// @Tags attendance
+// @Produce application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+// @Param kelas query string false "Kelas"
+// @Param jurusan query string false "Jurusan"
+// @Param tanggal query string true "Tanggal (format: YYYY-MM-DD)"
+// @Success 200 {file} file
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /export/attendance [get]
 func ExportAttendance(c *fiber.Ctx) error {
 
 	kelas := c.Query("kelas")

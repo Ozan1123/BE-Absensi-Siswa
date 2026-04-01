@@ -10,7 +10,17 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-
+// Login godoc
+// @Summary Login user
+// @Description Login menggunakan NISN dan password
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body requests.Login true "Login request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Router /auth/login [post]
 func Login(c *fiber.Ctx) error {
 	var req requests.Login
 	if err := c.BodyParser(&req);err != nil {
@@ -37,6 +47,15 @@ func Login(c *fiber.Ctx) error {
 	})
 }
 
+// Me godoc
+// @Summary Get current user
+// @Description Ambil data user berdasarkan token
+// @Tags auth
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]string
+// @Security BearerAuth
+// @Router /auth/me [get]
 func Me(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(int64)
 

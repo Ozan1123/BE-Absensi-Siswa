@@ -1,0 +1,304 @@
+basePath: /api/v1
+definitions:
+  requests.Login:
+    properties:
+      nisn:
+        type: string
+      password:
+        type: string
+    type: object
+  requests.SubmitToken:
+    properties:
+      token_code:
+        type: string
+    type: object
+  requests.TokenReq:
+    properties:
+      duration:
+        type: integer
+      late_after:
+        type: integer
+    type: object
+host: www.reihan.biz.id
+info:
+  contact: {}
+  description: Ini adalah dokumentasi API gue
+  title: My API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Login menggunakan NISN dan password
+      parameters:
+      - description: Login request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/requests.Login'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Login user
+      tags:
+      - auth
+  /auth/me:
+    get:
+      description: Ambil data user berdasarkan token
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - auth
+  /dashboard:
+    get:
+      description: Mengambil data ringkasan dashboard (total user, absensi, dll)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Ambil data dashboard
+      tags:
+      - dashboard
+  /export/attendance:
+    get:
+      description: Mengexport data absensi berdasarkan kelas, jurusan, dan tanggal
+        dalam bentuk file Excel
+      parameters:
+      - description: Kelas
+        in: query
+        name: kelas
+        type: string
+      - description: Jurusan
+        in: query
+        name: jurusan
+        type: string
+      - description: 'Tanggal (format: YYYY-MM-DD)'
+        in: query
+        name: tanggal
+        required: true
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Export data absensi ke Excel
+      tags:
+      - attendance
+  /logs:
+    get:
+      description: Mengambil riwayat absensi berdasarkan user yang sedang login
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Ambil semua log absensi user
+      tags:
+      - logs
+  /token/absen:
+    post:
+      consumes:
+      - application/json
+      description: Siswa memasukkan token untuk melakukan absensi
+      parameters:
+      - description: Submit token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/requests.SubmitToken'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Submit token absensi
+      tags:
+      - token
+  /token/create:
+    post:
+      consumes:
+      - application/json
+      description: Guru membuat token dengan durasi dan toleransi keterlambatan
+      parameters:
+      - description: Request token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/requests.TokenReq'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Buat token absensi (custom)
+      tags:
+      - token
+  /token/create/default:
+    post:
+      description: Guru membuat token dengan durasi default (20 menit, telat 15 menit)
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Buat token absensi default
+      tags:
+      - token
+swagger: "2.0"

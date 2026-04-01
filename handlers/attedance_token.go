@@ -10,6 +10,21 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+
+// CreateToken godoc
+// @Summary Buat token absensi (custom)
+// @Description Guru membuat token dengan durasi dan toleransi keterlambatan
+// @Tags token
+// @Accept json
+// @Produce json
+// @Param request body requests.TokenReq true "Request token"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /token/create [post]
 func CreateToken(c *fiber.Ctx) error {
 	adminID, ok := c.Locals("user_id").(int64)
 	if !ok {
@@ -37,6 +52,17 @@ func CreateToken(c *fiber.Ctx) error {
 	})
 }
 
+// CreateTokenDefault godoc
+// @Summary Buat token absensi default
+// @Description Guru membuat token dengan durasi default (20 menit, telat 15 menit)
+// @Tags token
+// @Produce json
+// @Success 201 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /token/create/default [post]
 func CreateTokenDefault(c *fiber.Ctx) error {
 	adminID, ok := c.Locals("user_id").(int64)
 	if !ok {
@@ -59,6 +85,21 @@ func CreateTokenDefault(c *fiber.Ctx) error {
 	})
 }
 
+
+// SubmitToken godoc
+// @Summary Submit token absensi
+// @Description Siswa memasukkan token untuk melakukan absensi
+// @Tags token
+// @Accept json
+// @Produce json
+// @Param request body requests.SubmitToken true "Submit token"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /token/absen [post]
 func SubmitToken(c *fiber.Ctx) error {
 	userID, ok := c.Locals("user_id").(int64)
 	if !ok {

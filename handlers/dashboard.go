@@ -5,6 +5,15 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// Dashboard godoc
+// @Summary Ambil data dashboard
+// @Description Mengambil data ringkasan dashboard (total user, absensi, dll)
+// @Tags dashboard
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /dashboard [get]
 func Dashboard(c *fiber.Ctx) error {
 	
 	data, err := repo.GetDashboardData()
