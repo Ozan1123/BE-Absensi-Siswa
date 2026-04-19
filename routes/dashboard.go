@@ -8,4 +8,5 @@ import (
 
 func SetupRouteDashboard(api fiber.Router) {
 	api.Get("/dashboard", middleware.AdminRoute ,handlers.Dashboard)
+	api.Get("/dashboard/trend",middleware.AdminRoute, handlers.GetTrendAttendance)
 }

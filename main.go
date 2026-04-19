@@ -11,12 +11,13 @@ import (
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/config"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/database/seeders"
+	_ "github.com/KicauOrgspark/BE-Absensi-Siswa/docs" // WAJIB sesuai module
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/routes"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-   fiberSwagger "github.com/swaggo/fiber-swagger"
-    _ "github.com/KicauOrgspark/BE-Absensi-Siswa/docs" // WAJIB sesuai module
+	fiberSwagger "github.com/swaggo/fiber-swagger"
 )
 
 func main() {
@@ -27,7 +28,7 @@ func main() {
 	database.ConnectDB()
 
 	//to running seeders
-	// seeders.RunSeed()	
+	seeders.RunSeed()	
 
 	//start token cleaner service
 	services.StartTokenCleaner()
@@ -35,9 +36,9 @@ func main() {
 	// Setup Routes
 	app := fiber.New()
 
-	 app.Get("/swagger/*", fiberSwagger.WrapHandler)
+	app.Get("/swagger/*", fiberSwagger.WrapHandler)
 
-	app.Use(cors.New(cors.Config{AllowOrigins: "http://localhost:5713,https://www.reihan.biz.id",
+	app.Use(cors.New(cors.Config{AllowOrigins: "http://localhost:5173,https://www.reihan.biz.id",
 		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,OPTIONS",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true, //jika pake jwt

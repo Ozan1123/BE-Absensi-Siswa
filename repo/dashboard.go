@@ -54,3 +54,6 @@ func GetDashboardData() (*responses.DashboardResponse, error) {
 		TotalAbsenHariIni: int(todayAttendances),
 	}, nil
 }
+
+
+
