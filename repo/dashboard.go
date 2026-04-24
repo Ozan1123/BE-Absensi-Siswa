@@ -20,27 +20,23 @@ func GetDashboardData() (*responses.DashboardResponse, error) {
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	end := start.Add(24 * time.Hour)
 
-	// total token
 	if err := database.DB.Model(&models.AttedanceTokens{}).
 		Count(&totalTokens).Error; err != nil {
 		return nil, err
 	}
 
-	// token hari ini (FAST)
 	if err := database.DB.Model(&models.AttedanceTokens{}).
 		Where("created_at >= ? AND created_at < ?", start, end).
 		Count(&todayTokens).Error; err != nil {
 		return nil, err
 	}
 
-	// active token
 	if err := database.DB.Model(&models.AttedanceTokens{}).
 		Where("is_active = ?", true).
 		Count(&activeTokens).Error; err != nil {
 		return nil, err
 	}
 
-	// attendance hari ini (FAST)
 	if err := database.DB.Model(&models.AttedanceLogs{}).
 		Where("clock_in_time >= ? AND clock_in_time < ?", start, end).
 		Count(&todayAttendances).Error; err != nil {
