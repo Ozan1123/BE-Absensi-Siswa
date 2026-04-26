@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/dto/requests"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/mappers"
@@ -9,7 +12,6 @@ import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/utils"
 	"github.com/gofiber/fiber/v2"
 )
-
 
 // CreateToken godoc
 // @Summary Buat token absensi (custom)
@@ -32,7 +34,7 @@ func CreateToken(c *fiber.Ctx) error {
 	}
 
 	role := c.Locals("role")
-	if role != "guru" {
+	if role != "admin" {
 		return c.Status(403).JSON(fiber.Map{"error": "Hanya guru yang bisa membuat token"})
 	}
 
@@ -70,7 +72,7 @@ func CreateTokenDefault(c *fiber.Ctx) error {
 	}
 
 	role := c.Locals("role")
-	if role != "guru" {
+	if role != "admin" {
 		return c.Status(403).JSON(fiber.Map{"error": "Hanya guru yang bisa membuat token"})
 	}
 
@@ -84,7 +86,6 @@ func CreateTokenDefault(c *fiber.Ctx) error {
 		"data":    mappers.ToTokenResponse(token),
 	})
 }
-
 
 // SubmitToken godoc
 // @Summary Submit token absensi
@@ -154,3 +155,108 @@ func SubmitToken(c *fiber.Ctx) error {
 		"status":  status,
 	})
 }
+
+// func GetTokenQR(c *fiber.Ctx) error {
+
+// 	id := c.Params("id")
+
+// 	var token models.AttedanceTokens
+
+// 	if err := database.DB.
+// 		First(&token, id).Error; err != nil {
+// 		return c.Status(404).JSON(fiber.Map{
+// 			"error": "token not found",
+// 		})
+// 	}
+
+// 	if time.Now().After(token.ValidUntil) {
+// 		return c.Status(410).JSON(fiber.Map{
+// 			"error": "token expired",
+// 		})
+// 	}
+
+// 	return c.JSON(fiber.Map{
+// 		"token_code": token.TokenCode,
+// 		"qr_url":     "/api/v1/tokens/" + id + "/image",
+// 		"expired_at": token.ValidUntil,
+// 		"late_after": token.LateAfter,
+// 		"is_active":  token.IsActive,
+// 	})
+// }
+
+
+//ini untuk membuat api get qr code by id token
+func GetTokenQRImage(c *fiber.Ctx) error {
+
+	id := c.Params("id")
+
+	var token models.AttedanceTokens
+
+	if err := database.DB.
+		First(&token, id).Error; err != nil {
+
+		return c.Status(404).JSON(fiber.Map{
+			"error": "token not found",
+		})
+	}
+
+	png, err := utils.GenerateQRCode(
+		token.TokenCode,
+	)
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "failed generate qr",
+		})
+	}
+
+	c.Set("Content-Type", "image/png")
+
+	return c.Send(png)
+}
+
+
+//ini untuk membuat api get qr code all token aktif
+func GetActiveTokens(c *fiber.Ctx) error {
+
+	var tokens []models.AttedanceTokens
+
+	now := time.Now()
+
+	err := database.DB.
+		Where("is_active = ?", true).
+		Where("valid_until > ?", now).
+		Order("created_at desc").
+		Find(&tokens).Error
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error":"gagal ambil token aktif",
+		})
+	}
+
+	var result []fiber.Map
+
+	for _, token := range tokens {
+
+		result = append(result, fiber.Map{
+			"id": token.ID,
+			"token_code": token.TokenCode,
+
+			"qr_url": fmt.Sprintf(
+				"/api/v1/tokens/%d/image",
+				token.ID,
+			),
+
+			"expired_at": token.ValidUntil,
+			"late_after": token.LateAfter,
+			"is_active": token.IsActive,
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":"success get qr code active!",
+		"data": result,
+	})
+}
+

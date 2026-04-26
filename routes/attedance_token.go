@@ -12,4 +12,7 @@ func SetupRouteAttedanceToken(api fiber.Router) {
 	token.Post("/create", middleware.AdminRoute, handlers.CreateToken)
 	token.Post("/create/default", middleware.AdminRoute, handlers.CreateTokenDefault)
 	token.Post("/absen", middleware.ProtectedRoute, handlers.SubmitToken)
+
+	token.Get("/qr_code/active", handlers.GetActiveTokens)
+	token.Get("/:id/image", handlers.GetTokenQRImage)
 }
