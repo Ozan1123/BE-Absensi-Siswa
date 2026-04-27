@@ -61,7 +61,7 @@ func GenerateAttendanceExcel(kelas, jurusan, tanggal string) (*excelize.File, er
 
 		row := i + 2
 
-		status := "-"
+		status := "alfa"
 		waktu := "-"
 
 		style := absenStyle
