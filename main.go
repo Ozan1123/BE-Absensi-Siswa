@@ -7,12 +7,17 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/config"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database/seeders"
 	_ "github.com/KicauOrgspark/BE-Absensi-Siswa/docs" // WAJIB sesuai module
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/routes"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
 	"github.com/gofiber/fiber/v2"
@@ -21,19 +26,21 @@ import (
 )
 
 func main() {
+
 	//load env
 	config.LoadEnv()
 
 	//connect to database
 	database.ConnectDB()
 
+	database.DB.AutoMigrate(&models.Users{})
+
 	//to running seeders
-	seeders.RunSeed()	
+	seeders.RunSeed()
 
 	//start token cleaner service
 	services.StartTokenCleaner()
 
-	// Setup Routes
 	app := fiber.New()
 
 	app.Get("/swagger/*", fiberSwagger.WrapHandler)
@@ -46,6 +53,31 @@ func main() {
 
 	routes.SetupRoutes(app)
 
-	//running project
-	fmt.Println("Server Is Running in Port", app.Listen(config.AppConfig.Port))
+	cronScheduler := services.InitAttendanceCron(database.DB)
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Jalankan server di goroutine terpisah
+	go func() {
+		log.Printf("Server berjalan di port %s", config.AppConfig.Port)
+		if err := app.Listen(config.AppConfig.Port); err != nil {
+			log.Fatalf("Gagal menjalankan server: %v", err)
+		}
+	}()
+
+	// Tunggu sinyal shutdown
+	sig := <-quit
+	log.Printf("Sinyal [%s] diterima — memulai graceful shutdown...", sig)
+
+	// Beri waktu 10 detik untuk menyelesaikan request yang masih berjalan
+	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
+		log.Fatalf("Gagal melakukan graceful shutdown: %v", err)
+	}
+
+	cronScheduler.Stop()
+	log.Println("[CRON] Scheduler dihentikan.")
+
+	log.Println("Server berhasil dimatikan dengan aman.")
+	
 }
