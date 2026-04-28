@@ -36,6 +36,7 @@ func SeedUsersFromExcel(path string) error {
 			Password:   string(passwordHash),
 			Role:       row[5],
 			ClassGroup: row[4],
+			ParentPhone: row[6],
 		}
 
 		// hindari duplicate username

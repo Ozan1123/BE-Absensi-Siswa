@@ -17,7 +17,6 @@ import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database/seeders"
 	_ "github.com/KicauOrgspark/BE-Absensi-Siswa/docs" // WAJIB sesuai module
-	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/routes"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
 	"github.com/gofiber/fiber/v2"
@@ -33,7 +32,7 @@ func main() {
 	//connect to database
 	database.ConnectDB()
 
-	database.DB.AutoMigrate(&models.Users{})
+	// database.DB.AutoMigrate(&models.Users{})
 
 	//to running seeders
 	seeders.RunSeed()

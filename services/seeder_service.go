@@ -50,6 +50,7 @@ func ImportUsersFromExcel(path string) (*responses.ImportResult,error){
 			Password: string(passwordHash),
 			Role: row[5],
 			ClassGroup: row[4],
+			ParentPhone: row[6],
 		}
 
 		var existing models.Users

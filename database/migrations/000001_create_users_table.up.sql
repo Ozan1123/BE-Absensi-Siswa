@@ -5,5 +5,6 @@ CREATE TABLE users (
     username VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(225) NOT NULL,
     role ENUM ("guru", "siswa", "admin", "superadmin") DEFAULT "siswa",
-    class_group VARCHAR(20)
+    class_group VARCHAR(20),
+    parent_phone VARCHAR(20)
 );
