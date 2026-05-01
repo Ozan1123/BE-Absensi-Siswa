@@ -9,5 +9,5 @@ import (
 func SetupRouteLogs(api fiber.Router) {
 	logs := api.Group("/logs")
 
-	logs.Get("/", middleware.ProtectedRoute, handlers.GetAllLogs)
+	logs.Get("/", middleware.SiswaOnly, handlers.GetAllLogs)
 }

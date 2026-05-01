@@ -10,5 +10,5 @@ func SetupAuthRoute(api fiber.Router) {
 	auth := api.Group("/auth")
 
 	auth.Post("/login", handlers.Login)
-	auth.Get("/me", middleware.ProtectedRoute, handlers.Me)
+	auth.Get("/me", middleware.AllRoles, handlers.Me)
 }

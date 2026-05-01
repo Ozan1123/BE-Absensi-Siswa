@@ -9,9 +9,9 @@ import (
 func SetupRouteAttedanceToken(api fiber.Router) {
 	token := api.Group("/token")
 
-	token.Post("/create", middleware.AdminRoute, handlers.CreateToken)
-	token.Post("/create/default", middleware.AdminRoute, handlers.CreateTokenDefault)
-	token.Post("/absen", middleware.ProtectedRoute, handlers.SubmitToken)
+	token.Post("/create", middleware.AdminOnly, handlers.CreateToken)
+	token.Post("/create/default", middleware.AdminOnly, handlers.CreateTokenDefault)
+	token.Post("/absen", middleware.SiswaOnly, handlers.SubmitToken)
 
 	token.Get("/qr_code/active", handlers.GetActiveTokens)
 	token.Get("/:id/image", handlers.GetTokenQRImage)
