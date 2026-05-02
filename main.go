@@ -7,6 +7,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -17,6 +18,7 @@ import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database/seeders"
 	_ "github.com/KicauOrgspark/BE-Absensi-Siswa/docs" // WAJIB sesuai module
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/routes"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
 	"github.com/gofiber/fiber/v2"
@@ -32,7 +34,20 @@ func main() {
 	//connect to database
 	database.ConnectDB()
 
-	// database.DB.AutoMigrate(&models.Users{})
+	database.DB.AutoMigrate(&models.Users{})
+
+	// Inisialisasi WhatsApp client
+	cfg := config.AppConfig
+	waDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName,
+	)
+	if err := services.InitWA(waDSN); err != nil {
+		log.Fatal("[WA] Gagal inisialisasi:", err)
+	}
+	if err := services.WAClient.Connect(); err != nil {
+		log.Fatal("[WA] Gagal connect:", err)
+	}
+	log.Println("[WA] Berhasil terhubung ke server WhatsApp.")
 
 	//to running seeders
 	seeders.RunSeed()
@@ -76,6 +91,9 @@ func main() {
 
 	cronScheduler.Stop()
 	log.Println("[CRON] Scheduler dihentikan.")
+
+	services.WAClient.Disconnect()
+	log.Println("[WA] Koneksi WhatsApp diputus.")
 
 	log.Println("Server berhasil dimatikan dengan aman.")
 	

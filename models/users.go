@@ -5,7 +5,7 @@ type Users struct {
 	ID          int64
 	Nisn        string `gorm:"type:varchar(50);unique"`
 	FullName    string
-	Username    string
+	Username    string `gorm:"type:varchar(50);unique"`
 	Password    string
 	Role        string
 	ClassGroup  string
