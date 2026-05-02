@@ -13,4 +13,5 @@ func SetupRoutes(app *fiber.App) {
 	SetupRouteDashboard(api)
 	SetupRouteExport(api)
 	SetupimportRoutes(api)
+	SetupNotificationRoutes(api)
 }

@@ -15,7 +15,7 @@ import (
 
 // CreateToken godoc
 // @Summary Buat token absensi (custom)
-// @Description Guru membuat token dengan durasi dan toleransi keterlambatan
+// @Description Guru/Admin membuat token dengan durasi dan toleransi keterlambatan
 // @Tags token
 // @Accept json
 // @Produce json
@@ -23,7 +23,6 @@ import (
 // @Success 201 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
-// @Failure 403 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /token/create [post]
@@ -31,11 +30,6 @@ func CreateToken(c *fiber.Ctx) error {
 	adminID, ok := c.Locals("user_id").(int64)
 	if !ok {
 		return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
-	}
-
-	role := c.Locals("role")
-	if role != "admin" {
-		return c.Status(403).JSON(fiber.Map{"error": "Hanya guru yang bisa membuat token"})
 	}
 
 	var req requests.TokenReq
@@ -56,12 +50,11 @@ func CreateToken(c *fiber.Ctx) error {
 
 // CreateTokenDefault godoc
 // @Summary Buat token absensi default
-// @Description Guru membuat token dengan durasi default (20 menit, telat 15 menit)
+// @Description Guru/Admin membuat token dengan durasi default (20 menit, telat 15 menit)
 // @Tags token
 // @Produce json
 // @Success 201 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
-// @Failure 403 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /token/create/default [post]
@@ -69,11 +62,6 @@ func CreateTokenDefault(c *fiber.Ctx) error {
 	adminID, ok := c.Locals("user_id").(int64)
 	if !ok {
 		return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
-	}
-
-	role := c.Locals("role")
-	if role != "admin" {
-		return c.Status(403).JSON(fiber.Map{"error": "Hanya guru yang bisa membuat token"})
 	}
 
 	token, err := utils.CreateToken(adminID, 20, 15)
@@ -97,7 +85,6 @@ func CreateTokenDefault(c *fiber.Ctx) error {
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
-// @Failure 403 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /token/absen [post]
@@ -105,11 +92,6 @@ func SubmitToken(c *fiber.Ctx) error {
 	userID, ok := c.Locals("user_id").(int64)
 	if !ok {
 		return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
-	}
-
-	role := c.Locals("role")
-	if role != "siswa" {
-		return c.Status(403).JSON(fiber.Map{"error": "Hanya murid yang bisa mengisi token"})
 	}
 
 	var req requests.SubmitToken
@@ -130,7 +112,7 @@ func SubmitToken(c *fiber.Ctx) error {
 
 	if count > 0 {
 		return c.Status(400).JSON(fiber.Map{
-			"error": "Kamu sudah  melakukan absensi",
+			"error": "Kamu sudah melakukan absensi",
 		})
 	}
 
@@ -138,10 +120,11 @@ func SubmitToken(c *fiber.Ctx) error {
 	status := services.DetermineAttendanceStatus(token, isExpired)
 
 	now := utils.Now()
+	tokenID := token.ID
 
 	log := models.AttedanceLogs{
 		UserID:      userID,
-		TokenID:     token.ID,
+		TokenID:     &tokenID,
 		Status:      status,
 		ClockInTime: now,
 	}
@@ -155,35 +138,6 @@ func SubmitToken(c *fiber.Ctx) error {
 		"status":  status,
 	})
 }
-
-// func GetTokenQR(c *fiber.Ctx) error {
-
-// 	id := c.Params("id")
-
-// 	var token models.AttedanceTokens
-
-// 	if err := database.DB.
-// 		First(&token, id).Error; err != nil {
-// 		return c.Status(404).JSON(fiber.Map{
-// 			"error": "token not found",
-// 		})
-// 	}
-
-// 	if time.Now().After(token.ValidUntil) {
-// 		return c.Status(410).JSON(fiber.Map{
-// 			"error": "token expired",
-// 		})
-// 	}
-
-// 	return c.JSON(fiber.Map{
-// 		"token_code": token.TokenCode,
-// 		"qr_url":     "/api/v1/tokens/" + id + "/image",
-// 		"expired_at": token.ValidUntil,
-// 		"late_after": token.LateAfter,
-// 		"is_active":  token.IsActive,
-// 	})
-// }
-
 
 //ini untuk membuat api get qr code by id token
 func GetTokenQRImage(c *fiber.Ctx) error {
@@ -215,7 +169,6 @@ func GetTokenQRImage(c *fiber.Ctx) error {
 	return c.Send(png)
 }
 
-
 //ini untuk membuat api get qr code all token aktif
 func GetActiveTokens(c *fiber.Ctx) error {
 
@@ -231,7 +184,7 @@ func GetActiveTokens(c *fiber.Ctx) error {
 
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{
-			"error":"gagal ambil token aktif",
+			"error": "gagal ambil token aktif",
 		})
 	}
 
@@ -240,7 +193,7 @@ func GetActiveTokens(c *fiber.Ctx) error {
 	for _, token := range tokens {
 
 		result = append(result, fiber.Map{
-			"id": token.ID,
+			"id":         token.ID,
 			"token_code": token.TokenCode,
 
 			"qr_url": fmt.Sprintf(
@@ -249,14 +202,13 @@ func GetActiveTokens(c *fiber.Ctx) error {
 			),
 
 			"expired_at": token.ValidUntil,
-			"late_after": token.LateAfter,
-			"is_active": token.IsActive,
+			"late_after":  token.LateAfter,
+			"is_active":  token.IsActive,
 		})
 	}
 
 	return c.JSON(fiber.Map{
-		"message":"success get qr code active!",
-		"data": result,
+		"message": "success get qr code active!",
+		"data":    result,
 	})
 }
-

@@ -7,7 +7,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -34,20 +33,21 @@ func main() {
 	//connect to database
 	database.ConnectDB()
 
-	database.DB.AutoMigrate(&models.Users{})
-
-	// Inisialisasi WhatsApp client
-	cfg := config.AppConfig
-	waDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName,
+	database.DB.AutoMigrate(
+		&models.Users{},
+		&models.AttedanceTokens{},
+		&models.AttedanceLogs{},
+		&models.NotificationSettings{},
+		&models.NotificationLogs{},
 	)
-	if err := services.InitWA(waDSN); err != nil {
+
+	// Inisialisasi WhatsApp client (whatsmeow via SQLite)
+	if err := services.InitWA(); err != nil {
 		log.Fatal("[WA] Gagal inisialisasi:", err)
 	}
-	if err := services.WAClient.Connect(); err != nil {
+	if err := services.ConnectWA(); err != nil {
 		log.Fatal("[WA] Gagal connect:", err)
 	}
-	log.Println("[WA] Berhasil terhubung ke server WhatsApp.")
 
 	//to running seeders
 	seeders.RunSeed()
