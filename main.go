@@ -17,7 +17,7 @@ import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database/seeders"
 	_ "github.com/KicauOrgspark/BE-Absensi-Siswa/docs" // WAJIB sesuai module
-	// "github.com/KicauOrgspark/BE-Absensi-Siswa/models"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/routes"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
 	"github.com/gofiber/fiber/v2"
@@ -33,7 +33,27 @@ func main() {
 	//connect to database
 	database.ConnectDB()
 
-	// database.DB.AutoMigrate(&models.Users{})
+	database.DB.AutoMigrate(
+		&models.Users{},
+		&models.AttedanceTokens{},
+		&models.AttedanceLogs{},
+		&models.NotificationSettings{},
+		&models.NotificationLogs{},
+	)
+
+	// Inisialisasi WhatsApp client di background (non-blocking)
+	// Supaya server Fiber langsung menyala tanpa menunggu scan QR
+	go func() {
+		if err := services.InitWA(); err != nil {
+			log.Printf("[WA] Gagal inisialisasi: %v (server tetap jalan)", err)
+			return
+		}
+		if err := services.ConnectWA(); err != nil {
+			log.Printf("[WA] Gagal connect: %v (server tetap jalan)", err)
+			return
+		}
+		log.Println("[WA] WhatsApp berhasil terkoneksi di background.")
+	}()
 
 	//to running seeders
 	seeders.RunSeed()
@@ -53,7 +73,8 @@ func main() {
 
 	routes.SetupRoutes(app)
 
-	cronScheduler := services.InitAttendanceCron(database.DB)
+	// Cron scheduler dimatikan — notifikasi WA sekarang dijadwalkan
+	// otomatis 30 menit setelah token QR absensi di-generate.
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -75,8 +96,12 @@ func main() {
 		log.Fatalf("Gagal melakukan graceful shutdown: %v", err)
 	}
 
-	cronScheduler.Stop()
-	log.Println("[CRON] Scheduler dihentikan.")
+	// Cron scheduler sudah tidak digunakan
+
+	if services.WAClient != nil {
+		services.WAClient.Disconnect()
+		log.Println("[WA] Koneksi WhatsApp diputus.")
+	}
 
 	log.Println("Server berhasil dimatikan dengan aman.")
 	

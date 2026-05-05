@@ -24,7 +24,7 @@ type AbsentStudentWithStatus struct {
 	Status      string
 }
 
-// GetUnattendedStudents mengambil siswa yang belum absen sama sekali hari ini
+// GetUnattendedStudents — ambil siswa yg belum absen sama sekali hari ini
 func GetUnattendedStudents(db *gorm.DB) ([]UnattendedStudent, error) {
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	now := time.Now().In(loc)
@@ -49,7 +49,7 @@ func GetUnattendedStudents(db *gorm.DB) ([]UnattendedStudent, error) {
 	return students, err
 }
 
-// GetStudentsByStatusToday mengambil siswa dengan status tertentu (sakit/izin) hari ini
+// GetStudentsByStatusToday — ambil siswa yg punya status tertentu (sakit/izin) hari ini
 func GetStudentsByStatusToday(db *gorm.DB, statuses []string) ([]AbsentStudentWithStatus, error) {
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	now := time.Now().In(loc)
@@ -74,7 +74,7 @@ func GetStudentsByStatusToday(db *gorm.DB, statuses []string) ([]AbsentStudentWi
 	return students, err
 }
 
-// GetNotificationSettingsMap mengambil semua settings sebagai map
+// GetNotificationSettingsMap — ambil semua settings jadi map[key]value
 func GetNotificationSettingsMap(db *gorm.DB) (map[string]string, error) {
 	var settings []models.NotificationSettings
 	if err := db.Find(&settings).Error; err != nil {
@@ -88,16 +88,18 @@ func GetNotificationSettingsMap(db *gorm.DB) (map[string]string, error) {
 	return result, nil
 }
 
-// IsNotificationSentToday cek apakah notifikasi sudah dikirim hari ini untuk user tertentu
-func IsNotificationSentToday(db *gorm.DB, userID int64, today string) bool {
+// IsNotificationSentToday — cek udah pernah kirim notif buat user+status ini hari ini belum
+// cuma ngitung yg success, jadi kalo kemarin failed bisa retry
+func IsNotificationSentToday(db *gorm.DB, userID int64, status string, today string) bool {
 	var count int64
 	db.Model(&models.NotificationLogs{}).
-		Where("user_id = ? AND sent_date = ?", userID, today).
+		Where("user_id = ? AND status = ? AND sent_date = ? AND response_status LIKE ?",
+			userID, status, today, "success%").
 		Count(&count)
 	return count > 0
 }
 
-// TodayDateString mengembalikan tanggal hari ini format YYYY-MM-DD
+// TodayDateString — return tanggal hari ini format YYYY-MM-DD (WIB)
 func TodayDateString() string {
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	return time.Now().In(loc).Format("2006-01-02")

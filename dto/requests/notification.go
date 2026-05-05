@@ -22,3 +22,8 @@ type UpdateStudentStatusReq struct {
 	UserID int64  `json:"user_id" validate:"required"`
 	Status string `json:"status" validate:"required"` // sakit, izin, alfa
 }
+
+// PairWAReq untuk request pairing code WA dari FE
+type PairWAReq struct {
+	Phone string `json:"phone" validate:"required"` // format: 628xxxxxxxxxx
+}
