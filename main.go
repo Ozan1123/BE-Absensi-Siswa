@@ -41,13 +41,19 @@ func main() {
 		&models.NotificationLogs{},
 	)
 
-	// Inisialisasi WhatsApp client (whatsmeow via SQLite)
-	if err := services.InitWA(); err != nil {
-		log.Fatal("[WA] Gagal inisialisasi:", err)
-	}
-	if err := services.ConnectWA(); err != nil {
-		log.Fatal("[WA] Gagal connect:", err)
-	}
+	// Inisialisasi WhatsApp client di background (non-blocking)
+	// Supaya server Fiber langsung menyala tanpa menunggu scan QR
+	go func() {
+		if err := services.InitWA(); err != nil {
+			log.Printf("[WA] Gagal inisialisasi: %v (server tetap jalan)", err)
+			return
+		}
+		if err := services.ConnectWA(); err != nil {
+			log.Printf("[WA] Gagal connect: %v (server tetap jalan)", err)
+			return
+		}
+		log.Println("[WA] WhatsApp berhasil terkoneksi di background.")
+	}()
 
 	//to running seeders
 	seeders.RunSeed()
@@ -67,7 +73,8 @@ func main() {
 
 	routes.SetupRoutes(app)
 
-	cronScheduler := services.InitAttendanceCron(database.DB)
+	// Cron scheduler dimatikan — notifikasi WA sekarang dijadwalkan
+	// otomatis 30 menit setelah token QR absensi di-generate.
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -89,11 +96,12 @@ func main() {
 		log.Fatalf("Gagal melakukan graceful shutdown: %v", err)
 	}
 
-	cronScheduler.Stop()
-	log.Println("[CRON] Scheduler dihentikan.")
+	// Cron scheduler sudah tidak digunakan
 
-	services.WAClient.Disconnect()
-	log.Println("[WA] Koneksi WhatsApp diputus.")
+	if services.WAClient != nil {
+		services.WAClient.Disconnect()
+		log.Println("[WA] Koneksi WhatsApp diputus.")
+	}
 
 	log.Println("Server berhasil dimatikan dengan aman.")
 	

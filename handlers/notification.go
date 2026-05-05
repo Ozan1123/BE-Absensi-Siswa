@@ -246,6 +246,76 @@ func TriggerNotificationNow(c *fiber.Ctx) error {
 	})
 }
 
+// GetWAStatus godoc
+// @Summary Cek status koneksi WhatsApp
+// @Description Mengambil status koneksi WhatsApp (connected/disconnected/waiting_pair)
+// @Tags whatsapp
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
+// @Router /notification/wa/status [get]
+func GetWAStatus(c *fiber.Ctx) error {
+	status := services.GetWAStatus()
+	return c.JSON(fiber.Map{
+		"message": "success",
+		"data":    status,
+	})
+}
+
+// PairWA godoc
+// @Summary Request pairing code WhatsApp
+// @Description Generate pairing code baru untuk menghubungkan WhatsApp. Masukkan kode di WhatsApp > Perangkat Tertaut > Tautkan dengan nomor telepon.
+// @Tags whatsapp
+// @Accept json
+// @Produce json
+// @Param request body requests.PairWAReq true "Nomor WhatsApp"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /notification/wa/pair [post]
+func PairWA(c *fiber.Ctx) error {
+	var req requests.PairWAReq
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "payload tidak valid"})
+	}
+
+	if req.Phone == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "phone wajib diisi (format: 628xxxxxxxxxx)"})
+	}
+
+	code, err := services.RequestPairingCode(req.Phone)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":      "pairing code berhasil digenerate",
+		"pairing_code": code,
+		"instruction":  "Buka WhatsApp > Perangkat Tertaut > Tautkan Perangkat > Tautkan dengan nomor telepon > Masukkan kode",
+		"expires_in":   "3 menit",
+	})
+}
+
+// LogoutWA godoc
+// @Summary Logout WhatsApp
+// @Description Disconnect dan hapus sesi WhatsApp. Setelah logout, perlu pair ulang.
+// @Tags whatsapp
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /notification/wa/logout [post]
+func LogoutWA(c *fiber.Ctx) error {
+	if err := services.LogoutWA(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "WhatsApp berhasil logout. Silakan pair ulang.",
+	})
+}
+
 // GetStudentsAttendanceToday godoc
 // @Summary Ambil daftar semua siswa + status absensi hari ini
 // @Description Menampilkan semua siswa beserta status absensi hari ini (hadir/telat/alfa/sakit/izin/belum_absen).

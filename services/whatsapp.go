@@ -225,7 +225,7 @@ func CheckAndNotifyAbsentStudents(db *gorm.DB) {
 // TestSendWhatsApp — kirim pesan test ke nomor tertentu (buat debugging)
 func TestSendWhatsApp(phone, message string) (string, error) {
 	if WAClient == nil || !WAClient.IsConnected() {
-		return "", fmt.Errorf("WhatsApp client belum terhubung. Pastikan sudah scan QR")
+		return "", fmt.Errorf("WhatsApp client belum terhubung. Pastikan sudah melakukan pairing")
 	}
 	return SendWhatsAppMessage(phone, message)
 }

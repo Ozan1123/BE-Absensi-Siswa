@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
@@ -42,6 +43,9 @@ func CreateToken(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
 	}
 
+	// Jadwalkan notifikasi WA otomatis 30 menit setelah token dibuat
+	scheduleAutoNotification()
+
 	return c.Status(201).JSON(fiber.Map{
 		"message": "Token berhasil dibuat",
 		"data":    mappers.ToTokenResponse(token),
@@ -69,10 +73,24 @@ func CreateTokenDefault(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
 	}
 
+	// Jadwalkan notifikasi WA otomatis 30 menit setelah token dibuat
+	scheduleAutoNotification()
+
 	return c.Status(201).JSON(fiber.Map{
 		"message": "Token berhasil dibuat",
 		"data":    mappers.ToTokenResponse(token),
 	})
+}
+
+// scheduleAutoNotification — jadwalkan broadcast notifikasi WA 30 menit dari sekarang.
+// Berjalan di background goroutine, tidak memblokir response API.
+func scheduleAutoNotification() {
+	time.AfterFunc(30*time.Minute, func() {
+		log.Println("[WA-TIMER] 30 menit sejak token dibuat — memulai broadcast notifikasi...")
+		services.CheckAndNotifyAbsentStudents(database.DB)
+		log.Println("[WA-TIMER] Broadcast notifikasi selesai.")
+	})
+	log.Println("[WA-TIMER] Notifikasi WA dijadwalkan 30 menit dari sekarang.")
 }
 
 // SubmitToken godoc
