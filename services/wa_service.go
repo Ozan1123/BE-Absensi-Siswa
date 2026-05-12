@@ -39,9 +39,9 @@ func InitWA() error {
 func ConnectWA() error {
 	if WAClient.Store.ID == nil {
 		// Belum ada sesi tersimpan — pakai Pairing Code (OTP)
-		phone := os.Getenv("WA_PHONE")
+		phone := NormalizePhone(os.Getenv("WA_PHONE"))
 		if phone == "" {
-			return fmt.Errorf("WA_PHONE belum diset di .env (format: 628xxxxxxxxxx)")
+			return fmt.Errorf("WA_PHONE belum diset di .env (format: 08xxx atau 628xxx)")
 		}
 
 		if err := WAClient.Connect(); err != nil {
@@ -51,6 +51,7 @@ func ConnectWA() error {
 		// Tunggu sebentar supaya koneksi stabil sebelum request pairing code
 		time.Sleep(1 * time.Second)
 
+		log.Printf("[WA] Pairing dengan nomor: %s", phone)
 		code, err := WAClient.PairPhone(context.Background(), phone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
 		if err != nil {
 			return fmt.Errorf("gagal generate pairing code: %w", err)
