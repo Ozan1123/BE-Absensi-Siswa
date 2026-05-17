@@ -54,17 +54,6 @@ func main() {
 		}
 		log.Println("[WA] WhatsApp berhasil terkoneksi di background.")
 
-		// === TEST MODE: Langsung trigger notifikasi + interval 1 menit ===
-		log.Println("[WA-TEST] WA connected — langsung jalankan test notifikasi...")
-		services.CheckAndNotifyAllStatuses(database.DB)
-
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			log.Println("[WA-TEST] Interval 1 menit — trigger notifikasi ulang...")
-			services.CheckAndNotifyAllStatuses(database.DB)
-		}
-		// === END TEST MODE ===
 	}()
 
 	//to running seeders

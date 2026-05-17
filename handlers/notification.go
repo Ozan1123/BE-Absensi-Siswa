@@ -239,10 +239,10 @@ func UpdateStudentStatus(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /notification/trigger [post]
 func TriggerNotificationNow(c *fiber.Ctx) error {
-	go services.CheckAndNotifyAbsentStudents(database.DB)
+	go services.AutoAlfaAndNotify(database.DB)
 
 	return c.JSON(fiber.Map{
-		"message": "notifikasi WA sedang diproses di background",
+		"message": "Proses Auto-Alfa dan notifikasi WA sedang berjalan di background",
 	})
 }
 
