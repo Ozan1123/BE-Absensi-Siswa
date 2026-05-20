@@ -38,13 +38,13 @@ func CreateToken(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Muatan tidak valid"})
 	}
 
-	token, err := utils.CreateToken(adminID, req.Duration, req.LateAfter)
+	token, err := utils.CreateToken(adminID, req.Duration, req.Category)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
 	}
 
-	// Jadwalkan notifikasi WA otomatis 30 menit setelah token dibuat
-	scheduleAutoNotification()
+	// Jadwalkan notifikasi WA otomatis setelah token expired
+	schedulePostTokenNotification(req.Category, req.Duration)
 
 	return c.Status(201).JSON(fiber.Map{
 		"message": "Token berhasil dibuat",
@@ -52,45 +52,77 @@ func CreateToken(c *fiber.Ctx) error {
 	})
 }
 
-// CreateTokenDefault godoc
-// @Summary Buat token absensi default
-// @Description Guru/Admin membuat token dengan durasi default (20 menit, telat 15 menit)
+// CreateTokenHadir godoc
+// @Summary Buat token absensi HADIR (Fase 1)
+// @Description Guru/Admin membuat token khusus kehadiran tepat waktu (default 30 menit)
 // @Tags token
 // @Produce json
 // @Success 201 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Security BearerAuth
-// @Router /token/create/default [post]
-func CreateTokenDefault(c *fiber.Ctx) error {
+// @Router /token/create/hadir [post]
+func CreateTokenHadir(c *fiber.Ctx) error {
 	adminID, ok := c.Locals("user_id").(int64)
 	if !ok {
 		return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
 	}
 
-	token, err := utils.CreateToken(adminID, 20, 15)
+	token, err := utils.CreateToken(adminID, 30, "hadir")
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
 	}
 
-	// Jadwalkan notifikasi WA otomatis 30 menit setelah token dibuat
-	scheduleAutoNotification()
+	schedulePostTokenNotification("hadir", 30)
 
 	return c.Status(201).JSON(fiber.Map{
-		"message": "Token berhasil dibuat",
+		"message": "Token Hadir berhasil dibuat",
 		"data":    mappers.ToTokenResponse(token),
 	})
 }
 
-// scheduleAutoNotification — jadwalkan broadcast notifikasi WA 30 menit dari sekarang.
+// CreateTokenTelat godoc
+// @Summary Buat token absensi TELAT (Fase 2)
+// @Description Guru/Admin membuat token khusus keterlambatan (default 60 menit)
+// @Tags token
+// @Produce json
+// @Success 201 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /token/create/telat [post]
+func CreateTokenTelat(c *fiber.Ctx) error {
+	adminID, ok := c.Locals("user_id").(int64)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	token, err := utils.CreateToken(adminID, 60, "telat")
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
+	}
+
+	schedulePostTokenNotification("telat", 60)
+
+	return c.Status(201).JSON(fiber.Map{
+		"message": "Token Telat berhasil dibuat",
+		"data":    mappers.ToTokenResponse(token),
+	})
+}
+
+// schedulePostTokenNotification — jadwalkan broadcast notifikasi WA setelah token expired.
 // Berjalan di background goroutine, tidak memblokir response API.
-func scheduleAutoNotification() {
-	time.AfterFunc(30*time.Minute, func() {
-		log.Println("[WA-TIMER] 30 menit sejak token dibuat — memulai broadcast notifikasi...")
-		services.CheckAndNotifyAbsentStudents(database.DB)
+func schedulePostTokenNotification(category string, durationMinutes int) {
+	time.AfterFunc(time.Duration(durationMinutes)*time.Minute, func() {
+		log.Printf("[WA-TIMER] Token %s expired (%d menit) — memulai broadcast notifikasi...", category, durationMinutes)
+		if category == "hadir" {
+			services.NotifyPresentStudents(database.DB)
+		} else if category == "telat" {
+			services.AutoAlfaAndNotify(database.DB)
+		}
 		log.Println("[WA-TIMER] Broadcast notifikasi selesai.")
 	})
-	log.Println("[WA-TIMER] Notifikasi WA dijadwalkan 30 menit dari sekarang.")
+	log.Printf("[WA-TIMER] Notifikasi WA '%s' dijadwalkan %d menit dari sekarang.", category, durationMinutes)
 }
 
 // SubmitToken godoc
@@ -117,10 +149,15 @@ func SubmitToken(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Muatan tidak valid"})
 	}
 
-	// Verifikasi token — sekarang token expired tetap dikembalikan (tidak ditolak)
+	// Verifikasi token
 	token, isExpired, err := utils.VerifyTokenCode(req.TokenCode)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Tolak jika token sudah kedaluwarsa (harus menunggu QR fase berikutnya jika masih ada)
+	if isExpired {
+		return c.Status(400).JSON(fiber.Map{"error": "Token QR sudah kedaluwarsa, silakan minta QR yang baru"})
 	}
 
 	var count int64
@@ -134,8 +171,8 @@ func SubmitToken(c *fiber.Ctx) error {
 		})
 	}
 
-	// Tentukan status via service layer (clean architecture)
-	status := services.DetermineAttendanceStatus(token, isExpired)
+	// Tentukan status via service layer (berdasarkan kategori token)
+	status := services.DetermineAttendanceStatus(token)
 
 	now := utils.Now()
 	tokenID := token.ID
@@ -220,7 +257,7 @@ func GetActiveTokens(c *fiber.Ctx) error {
 			),
 
 			"expired_at": token.ValidUntil,
-			"late_after":  token.LateAfter,
+			"category":   token.Category,
 			"is_active":  token.IsActive,
 		})
 	}

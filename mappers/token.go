@@ -13,6 +13,7 @@ func ToTokenResponse(t *models.AttedanceTokens) responses.TokenRes {
 			ID: t.User.ID,
 			FullName: t.User.FullName,
 		},
+		Category: t.Category,
 		IsActive: t.IsActive,
 		ValidUntil: t.ValidUntil,
 		CreatedAt: t.CreatedAt,

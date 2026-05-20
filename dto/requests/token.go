@@ -1,8 +1,8 @@
 package requests
 
 type TokenReq struct {
-	Duration  int `json:"duration"`
-	LateAfter int `json:"late_after"`
+	Duration int    `json:"duration"`
+	Category string `json:"category"` // "hadir" atau "telat"
 }
 
 type SubmitToken struct {

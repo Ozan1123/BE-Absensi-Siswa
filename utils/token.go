@@ -19,7 +19,7 @@ func RandomString(lenght int) string {
 	return string(b)
 }
 
-func CreateToken(adminID int64, durationMinutes int, lateAfter int) (*models.AttedanceTokens, error) {
+func CreateToken(adminID int64, durationMinutes int, category string) (*models.AttedanceTokens, error) {
 	var tokenCode string
 
 	for {
@@ -36,21 +36,15 @@ func CreateToken(adminID int64, durationMinutes int, lateAfter int) (*models.Att
 		}
 	}
 
-	if lateAfter >= durationMinutes {
-		return nil, errors.New("late duration tidak boleh lebih besar dari durasi token")
-	}
-
 	now := Now()
-
 	expired := now.Add(time.Minute * time.Duration(durationMinutes))
-	lateTime := now.Add(time.Minute * time.Duration(durationMinutes-lateAfter))
 
 	token := models.AttedanceTokens{
 		TokenCode:  tokenCode,
 		CreatedBy:  adminID,
+		Category:   category,
 		IsActive:   true,
 		ValidUntil: expired,
-		LateAfter:  lateTime,
 	}
 
 	if err := database.DB.Create(&token).Error; err != nil {

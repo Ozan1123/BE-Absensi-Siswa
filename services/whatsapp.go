@@ -73,6 +73,18 @@ func BuildNotificationMessage(nama, nisn, kelas, status string) string {
 
 	var body string
 	switch strings.ToLower(status) {
+	case "hadir":
+		body = fmt.Sprintf(
+			"Kami informasikan bahwa ananda *%s* hari ini telah hadir di sekolah dan melakukan absensi dengan status *HADIR*. "+
+				"Terima kasih atas perhatian Bapak/Ibu.",
+			nama,
+		)
+	case "telat":
+		body = fmt.Sprintf(
+			"Kami informasikan bahwa ananda *%s* hari ini hadir di sekolah namun tercatat *TERLAMBAT*. "+
+				"Mohon Bapak/Ibu dapat mengingatkan putra/putri Anda untuk datang tepat waktu.",
+			nama,
+		)
 	case StatusAlfa:
 		body = fmt.Sprintf(
 			"Kami informasikan bahwa ananda *%s* hari ini terpantau *BELUM MELAKUKAN ABSENSI (ALFA)*. "+
@@ -155,8 +167,8 @@ func processNotificationBatch(db *gorm.DB, targets []notifTarget, today string) 
 	return sent, skipped, failed
 }
 
-// CheckAndNotifyAllStatuses — fungsi utama yg dipanggil cron, ngurus semua status sekaligus
-func CheckAndNotifyAllStatuses(db *gorm.DB) {
+// NotifyPresentStudents — kirim notif hanya untuk siswa yang sudah HADIR (dipanggil setelah QR 1 expired)
+func NotifyPresentStudents(db *gorm.DB) {
 	settings, err := repo.GetNotificationSettingsMap(db)
 	if err != nil {
 		log.Printf("[WA] Gagal ambil settings: %v", err)
@@ -176,51 +188,102 @@ func CheckAndNotifyAllStatuses(db *gorm.DB) {
 	today := repo.TodayDateString()
 	var allTargets []notifTarget
 
-	// 1) Tarik data siswa ALFA (belum absen sama sekali)
-	alfaStudents, err := repo.GetUnattendedStudents(db)
+	// Tarik data siswa HADIR saja
+	hadirStudents, err := repo.GetStudentsByStatusToday(db, []string{"hadir"})
 	if err != nil {
-		log.Printf("[WA] Gagal ambil data ALFA: %v", err)
+		log.Printf("[WA] Gagal ambil data HADIR: %v", err)
 	} else {
-		for _, s := range alfaStudents {
+		for _, s := range hadirStudents {
 			allTargets = append(allTargets, notifTarget{
 				UserID: s.ID, FullName: s.FullName, Nisn: s.Nisn,
 				ClassGroup: s.ClassGroup, ParentPhone: s.ParentPhone,
-				Status: StatusAlfa,
+				Status: "hadir",
 			})
 		}
-		log.Printf("[WA] ALFA: %d siswa.", len(alfaStudents))
-	}
-
-	// 2) Tarik data siswa SAKIT dan IZIN sekaligus (1 query)
-	sakitIzinStudents, err := repo.GetStudentsByStatusToday(db, []string{StatusSakit, StatusIzin})
-	if err != nil {
-		log.Printf("[WA] Gagal ambil data SAKIT/IZIN: %v", err)
-	} else {
-		for _, s := range sakitIzinStudents {
-			allTargets = append(allTargets, notifTarget{
-				UserID: s.ID, FullName: s.FullName, Nisn: s.Nisn,
-				ClassGroup: s.ClassGroup, ParentPhone: s.ParentPhone,
-				Status: s.Status, // Status dinamis dapet dari DB (sakit / izin)
-			})
-		}
-		log.Printf("[WA] SAKIT/IZIN: %d siswa.", len(sakitIzinStudents))
+		log.Printf("[WA] HADIR: %d siswa.", len(hadirStudents))
 	}
 
 	if len(allTargets) == 0 {
-		log.Println("[WA] Ga ada siswa yg perlu dinotif hari ini.")
+		log.Println("[WA] Ga ada siswa yg perlu dinotif hadir.")
 		return
 	}
 
-	log.Printf("[WA] Total %d siswa masuk antrian notif.", len(allTargets))
-
+	log.Printf("[WA] Total %d siswa masuk antrian notif hadir.", len(allTargets))
 	sent, skipped, failed := processNotificationBatch(db, allTargets, today)
-	log.Printf("[WA] Done — Terkirim: %d | Skip: %d | Gagal: %d", sent, skipped, failed)
+	log.Printf("[WA] Done (Hadir) — Terkirim: %d | Skip: %d | Gagal: %d", sent, skipped, failed)
 }
 
-// CheckAndNotifyAbsentStudents — alias biar cron_service.go ga perlu diubah
-func CheckAndNotifyAbsentStudents(db *gorm.DB) {
-	CheckAndNotifyAllStatuses(db)
+// AutoAlfaAndNotify — set alfa untuk siswa tanpa log, lalu kirim notif telat/sakit/izin/alfa (dipanggil setelah QR 2 expired)
+func AutoAlfaAndNotify(db *gorm.DB) {
+	// 1. Jalankan Auto-Alfa dulu
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	now := time.Now().In(loc)
+
+	log.Println("[WA] Memulai proses Auto-Alfa...")
+	
+	// Cari siswa yang belum absen hari ini
+	unattended, err := repo.GetUnattendedStudents(db)
+	if err != nil {
+		log.Printf("[WA] Gagal ambil siswa tanpa absen untuk auto-alfa: %v", err)
+	} else {
+		for _, s := range unattended {
+			logAbsensi := models.AttedanceLogs{
+				UserID:      s.ID,
+				Status:      StatusAlfa,
+				ClockInTime: now,
+			}
+			if err := db.Create(&logAbsensi).Error; err != nil {
+				log.Printf("[WA] Gagal set alfa untuk siswa %d: %v", s.ID, err)
+			}
+		}
+		log.Printf("[WA] Auto-Alfa selesai: %d siswa ditandai ALFA.", len(unattended))
+	}
+
+	// 2. Lanjut ke proses pengiriman notifikasi WA
+	settings, err := repo.GetNotificationSettingsMap(db)
+	if err != nil {
+		log.Printf("[WA] Gagal ambil settings: %v", err)
+		return
+	}
+
+	if settings["wa_enabled"] != "true" {
+		log.Println("[WA] Notifikasi WA lagi off.")
+		return
+	}
+
+	if WAClient == nil || !WAClient.IsConnected() {
+		log.Println("[WA] Client belum konek, skip dulu.")
+		return
+	}
+
+	today := repo.TodayDateString()
+	var allTargets []notifTarget
+
+	// Tarik data siswa ALFA, SAKIT, IZIN, TELAT (semua kecuali hadir)
+	targetStudents, err := repo.GetStudentsByStatusToday(db, []string{StatusAlfa, StatusSakit, StatusIzin, "telat"})
+	if err != nil {
+		log.Printf("[WA] Gagal ambil data target notif: %v", err)
+	} else {
+		for _, s := range targetStudents {
+			allTargets = append(allTargets, notifTarget{
+				UserID: s.ID, FullName: s.FullName, Nisn: s.Nisn,
+				ClassGroup: s.ClassGroup, ParentPhone: s.ParentPhone,
+				Status: s.Status,
+			})
+		}
+		log.Printf("[WA] Target Notif (Selain Hadir): %d siswa.", len(targetStudents))
+	}
+
+	if len(allTargets) == 0 {
+		log.Println("[WA] Ga ada siswa yg perlu dinotif telat/alfa/sakit/izin.")
+		return
+	}
+
+	log.Printf("[WA] Total %d siswa masuk antrian notif telat/alfa/sakit/izin.", len(allTargets))
+	sent, skipped, failed := processNotificationBatch(db, allTargets, today)
+	log.Printf("[WA] Done (Lainnya) — Terkirim: %d | Skip: %d | Gagal: %d", sent, skipped, failed)
 }
+
 
 // TestSendWhatsApp — kirim pesan test ke nomor tertentu (buat debugging)
 func TestSendWhatsApp(phone, message string) (string, error) {

@@ -53,6 +53,7 @@ func main() {
 			return
 		}
 		log.Println("[WA] WhatsApp berhasil terkoneksi di background.")
+
 	}()
 
 	//to running seeders
