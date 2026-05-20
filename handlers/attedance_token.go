@@ -7,6 +7,7 @@ import (
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/dto/requests"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/dto/responses"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/mappers"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
@@ -265,5 +266,66 @@ func GetActiveTokens(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message": "success get qr code active!",
 		"data":    result,
+	})
+}
+
+// GetTokensPaginated godoc
+// @Summary Ambil daftar semua token (paginasi)
+// @Description Mengambil riwayat semua token absensi dengan paginasi
+// @Tags token
+// @Produce json
+// @Param page query int false "Nomor halaman (default: 1)"
+// @Param limit query int false "Jumlah per halaman (default: 20)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /token [get]
+func GetTokensPaginated(c *fiber.Ctx) error {
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 20)
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	var total int64
+	if err := database.DB.Model(&models.AttedanceTokens{}).Count(&total).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "gagal menghitung total token"})
+	}
+
+	var tokens []models.AttedanceTokens
+	if err := database.DB.
+		Preload("User").
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&tokens).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "gagal mengambil data token"})
+	}
+
+	var result []responses.TokenRes
+	for _, t := range tokens {
+		result = append(result, mappers.ToTokenResponse(&t))
+	}
+
+	totalPages := int(total) / limit
+	if int(total)%limit != 0 {
+		totalPages++
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "success",
+		"data": fiber.Map{
+			"tokens":     result,
+			"totalPages": totalPages,
+			"page":       page,
+			"limit":      limit,
+			"total":      total,
+		},
 	})
 }
