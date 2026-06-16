@@ -33,24 +33,50 @@ func ImportUsersFromExcel(path string) (*responses.ImportResult,error){
 			continue
 		}
 
-		if len(row) < 5 {
+		if len(row) < 3 {
+			result.Failed++
+			continue
+		}
+
+		// Akses kolom secara aman dengan nilai default
+		nisn := row[0]
+		fullName := row[1]
+		username := row[2]
+		password := ""
+		if len(row) > 3 {
+			password = row[3]
+		}
+		classGroup := ""
+		if len(row) > 4 {
+			classGroup = row[4]
+		}
+		role := "siswa"
+		if len(row) > 5 && row[5] != "" {
+			role = row[5]
+		}
+		parentPhone := ""
+		if len(row) > 6 {
+			parentPhone = row[6]
+		}
+
+		if password == "" {
 			result.Failed++
 			continue
 		}
 
 		passwordHash,_ := bcrypt.GenerateFromPassword(
-			[]byte(row[3]),
+			[]byte(password),
 			bcrypt.DefaultCost,
 		)
 
 		user := models.Users{
-			Nisn: row[0],
-			FullName: row[1],
-			Username: row[2],
+			Nisn: nisn,
+			FullName: fullName,
+			Username: username,
 			Password: string(passwordHash),
-			Role: row[5],
-			ClassGroup: row[4],
-			ParentPhone: row[6],
+			Role: role,
+			ClassGroup: classGroup,
+			ParentPhone: parentPhone,
 		}
 
 		var existing models.Users

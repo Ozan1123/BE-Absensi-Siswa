@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -31,19 +32,26 @@ type notifTarget struct {
 	Status      string
 }
 
-// NormalizePhone — konversi 08xxx jadi 628xxx buat format JID WhatsApp
+// NormalizePhone — konversi nomor HP ke format JID WhatsApp (628xxx)
+// Menghapus semua karakter non-angka (spasi, strip, kurung, dll)
+// lalu mengkonversi awalan 08/+62 ke 62.
 func NormalizePhone(phone string) string {
 	phone = strings.TrimSpace(phone)
+	// Hapus semua karakter non-digit
+	re := regexp.MustCompile(`[^0-9]`)
+	phone = re.ReplaceAllString(phone, "")
 	if strings.HasPrefix(phone, "08") {
 		return "62" + phone[1:]
 	}
-	if strings.HasPrefix(phone, "+62") {
-		return phone[1:]
+	// Jika dimulai dengan 62 (dari +62 yang sudah di-strip), langsung return
+	if strings.HasPrefix(phone, "62") {
+		return phone
 	}
 	return phone
 }
 
 // SendWhatsAppMessage — kirim pesan WA lewat whatsmeow client
+// Menggunakan context timeout 15 detik agar tidak hang jika koneksi mati.
 func SendWhatsAppMessage(phone, message string) (string, error) {
 	if WAClient == nil || !WAClient.IsConnected() {
 		return "", fmt.Errorf("WhatsApp client belum terhubung")
@@ -51,7 +59,10 @@ func SendWhatsAppMessage(phone, message string) (string, error) {
 
 	jid := types.NewJID(NormalizePhone(phone), types.DefaultUserServer)
 
-	resp, err := WAClient.SendMessage(context.Background(), jid, &waE2E.Message{
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	resp, err := WAClient.SendMessage(ctx, jid, &waE2E.Message{
 		Conversation: proto.String(message),
 	})
 	if err != nil {

@@ -18,4 +18,5 @@ func SetupRouteAttedanceToken(api fiber.Router) {
 
 	token.Get("/qr_code/active", handlers.GetActiveTokens)
 	token.Get("/:id/image", handlers.GetTokenQRImage)
+	token.Post("/:id/deactivate", middleware.AdminOnly, handlers.DeactivateToken)
 }

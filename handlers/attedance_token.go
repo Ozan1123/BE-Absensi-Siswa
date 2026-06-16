@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
@@ -44,8 +43,8 @@ func CreateToken(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
 	}
 
-	// Jadwalkan notifikasi WA otomatis setelah token expired
-	schedulePostTokenNotification(req.Category, req.Duration)
+	// Notifikasi WA dijadwalkan secara otomatis oleh StartTokenCleaner
+	// setelah token expired (tidak perlu time.AfterFunc di sini).
 
 	return c.Status(201).JSON(fiber.Map{
 		"message": "Token berhasil dibuat",
@@ -74,7 +73,7 @@ func CreateTokenHadir(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
 	}
 
-	schedulePostTokenNotification("hadir", 30)
+	// Notifikasi WA dijadwalkan secara otomatis oleh StartTokenCleaner
 
 	return c.Status(201).JSON(fiber.Map{
 		"message": "Token Hadir berhasil dibuat",
@@ -103,7 +102,7 @@ func CreateTokenTelat(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"errors": err.Error()})
 	}
 
-	schedulePostTokenNotification("telat", 60)
+	// Notifikasi WA dijadwalkan secara otomatis oleh StartTokenCleaner
 
 	return c.Status(201).JSON(fiber.Map{
 		"message": "Token Telat berhasil dibuat",
@@ -111,20 +110,7 @@ func CreateTokenTelat(c *fiber.Ctx) error {
 	})
 }
 
-// schedulePostTokenNotification — jadwalkan broadcast notifikasi WA setelah token expired.
-// Berjalan di background goroutine, tidak memblokir response API.
-func schedulePostTokenNotification(category string, durationMinutes int) {
-	time.AfterFunc(time.Duration(durationMinutes)*time.Minute, func() {
-		log.Printf("[WA-TIMER] Token %s expired (%d menit) — memulai broadcast notifikasi...", category, durationMinutes)
-		if category == "hadir" {
-			services.NotifyPresentStudents(database.DB)
-		} else if category == "telat" {
-			services.AutoAlfaAndNotify(database.DB)
-		}
-		log.Println("[WA-TIMER] Broadcast notifikasi selesai.")
-	})
-	log.Printf("[WA-TIMER] Notifikasi WA '%s' dijadwalkan %d menit dari sekarang.", category, durationMinutes)
-}
+
 
 // SubmitToken godoc
 // @Summary Submit token absensi
@@ -329,3 +315,39 @@ func GetTokensPaginated(c *fiber.Ctx) error {
 		},
 	})
 }
+
+// DeactivateToken godoc
+// @Summary Deaktivasi token absensi secara manual
+// @Description Mengubah status token absensi agar tidak aktif (is_active = false) dan masa berlaku berakhir saat ini
+// @Tags token
+// @Produce json
+// @Param id path int true "Token ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Security BearerAuth
+// @Router /token/{id}/deactivate [post]
+func DeactivateToken(c *fiber.Ctx) error {
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "ID token tidak valid"})
+	}
+
+	var token models.AttedanceTokens
+	if err := database.DB.First(&token, id).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "token tidak ditemukan"})
+	}
+
+	token.IsActive = false
+	token.ValidUntil = time.Now()
+
+	if err := database.DB.Save(&token).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "gagal menonaktifkan token"})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "token berhasil dinonaktifkan",
+	})
+}
+

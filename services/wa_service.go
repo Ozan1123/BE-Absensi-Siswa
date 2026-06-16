@@ -135,6 +135,9 @@ func RequestPairingCode(phone string) (string, error) {
 		time.Sleep(1 * time.Second)
 	}
 
+	// Normalisasi nomor telepon sebelum pairing
+	phone = NormalizePhone(phone)
+
 	code, err := WAClient.PairPhone(context.Background(), phone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
 	if err != nil {
 		return "", fmt.Errorf("gagal generate pairing code: %w", err)
