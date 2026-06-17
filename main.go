@@ -62,6 +62,9 @@ func main() {
 	//start token cleaner service
 	services.StartTokenCleaner()
 
+	//start background notification sender
+	services.StartNotificationSender(database.DB)
+
 	app := fiber.New()
 
 	app.Get("/swagger/*", fiberSwagger.WrapHandler)

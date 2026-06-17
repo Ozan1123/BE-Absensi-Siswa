@@ -33,14 +33,17 @@ func StartTokenCleaner() {
 				Find(&unprocessedTokens)
 
 			for _, token := range unprocessedTokens {
-				log.Printf("[WA-CLEANER] Token %s (kategori: %s) expired & belum diproses — memulai broadcast notifikasi...",
+				log.Printf("[WA-CLEANER] Token %s (kategori: %s) expired & belum diproses — mendelegasikan broadcast notifikasi...",
 					token.TokenCode, token.Category)
 
-				if token.Category == "hadir" {
-					NotifyPresentStudents(database.DB)
-				} else if token.Category == "telat" {
-					AutoAlfaAndNotify(database.DB)
-				}
+				// Jalankan di background goroutine agar tidak menyumbat loop utama cleaner
+				go func(t models.AttedanceTokens) {
+					if t.Category == "hadir" {
+						NotifyPresentStudents(database.DB)
+					} else if t.Category == "telat" {
+						AutoAlfaAndNotify(database.DB)
+					}
+				}(token)
 
 				// Tandai token sebagai sudah diproses notifikasinya
 				database.DB.
@@ -48,7 +51,7 @@ func StartTokenCleaner() {
 					Where("id = ?", token.ID).
 					Update("notification_processed", true)
 
-				log.Printf("[WA-CLEANER] Token %s (kategori: %s) — broadcast notifikasi selesai, ditandai processed.",
+				log.Printf("[WA-CLEANER] Token %s (kategori: %s) — broadcast notifikasi didelegasikan, ditandai processed.",
 					token.TokenCode, token.Category)
 			}
 

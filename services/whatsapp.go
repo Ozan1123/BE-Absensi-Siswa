@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
@@ -20,6 +23,11 @@ const (
 	StatusAlfa  = "alfa"
 	StatusSakit = "sakit"
 	StatusIzin  = "izin"
+)
+
+var (
+	autoAlfaMutex          sync.Mutex
+	isSendingNotifications int32
 )
 
 // struct ringan buat nampung data target notif
@@ -73,7 +81,25 @@ func SendWhatsAppMessage(phone, message string) (string, error) {
 }
 
 // BuildNotificationMessage — bikin teks pesan dinamis sesuai status (pake switch-case)
-func BuildNotificationMessage(nama, nisn, kelas, status string) string {
+func BuildNotificationMessage(settings map[string]string, nama, nisn, kelas, status string) string {
+	template := settings["wa_message_template"]
+	schoolName := settings["school_name"]
+	if schoolName == "" {
+		schoolName = "SMK PLUS PELITA NUSANTARA" // fallback
+	}
+
+	if template != "" {
+		// Replace placeholders: {nama}, {nisn}, {kelas}, {status}, {nama_sekolah}
+		r := strings.NewReplacer(
+			"{nama}", nama,
+			"{nisn}", nisn,
+			"{kelas}", kelas,
+			"{status}", strings.ToUpper(status),
+			"{nama_sekolah}", schoolName,
+		)
+		return r.Replace(template)
+	}
+
 	header := fmt.Sprintf(
 		"Assalamualaikum Wr. Wb.\n\nYth. Bapak/Ibu Orang Tua/Wali dari:\n"+
 			"  Nama  : *%s*\n"+
@@ -121,17 +147,17 @@ func BuildNotificationMessage(nama, nisn, kelas, status string) string {
 		)
 	}
 
-	footer := "\n\nTerima kasih atas perhatian Bapak/Ibu.\nWassalamualaikum Wr. Wb.\n\n_Pesan ini dikirim secara otomatis oleh Sistem Absensi Sekolah SMK PLUS PELITA NUSANTARA._"
+	footer := fmt.Sprintf("\n\nTerima kasih atas perhatian Bapak/Ibu.\nWassalamualaikum Wr. Wb.\n\n_Pesan ini dikirim secara otomatis oleh Sistem Absensi Sekolah %s._", schoolName)
 
 	return header + body + footer
 }
 
-// processNotificationBatch — proses kirim notif per-batch, udah include spam guard + rate limit
-func processNotificationBatch(db *gorm.DB, targets []notifTarget, today string) (sent, skipped, failed int) {
+// queueNotificationBatch — masukkan data notifikasi ke tabel antrean (notification_logs) dengan status "pending"
+func queueNotificationBatch(db *gorm.DB, settings map[string]string, targets []notifTarget, today string) (queued, skipped int) {
 	for _, t := range targets {
-		// spam guard: kalo status ini udah pernah dikirim hari ini, skip aja
-		if repo.IsNotificationSentToday(db, t.UserID, t.Status, today) {
-			log.Printf("[WA] Skip %s (status: %s) — udah dikirim hari ini.", t.FullName, t.Status)
+		// spam guard: kalo status ini udah pernah dikirim hari ini atau sedang antre, skip aja
+		if repo.IsNotificationSentOrPendingToday(db, t.UserID, t.Status, today) {
+			log.Printf("[WA] Skip %s (status: %s) — udah dikirim atau sedang antre hari ini.", t.FullName, t.Status)
 			skipped++
 			continue
 		}
@@ -144,38 +170,91 @@ func processNotificationBatch(db *gorm.DB, targets []notifTarget, today string) 
 		}
 
 		// bangun pesan sesuai status
-		message := BuildNotificationMessage(t.FullName, t.Nisn, t.ClassGroup, t.Status)
+		message := BuildNotificationMessage(settings, t.FullName, t.Nisn, t.ClassGroup, t.Status)
 
-		log.Printf("[WA] Ngirim ke %s buat siswa %s (status: %s)...",
-			NormalizePhone(t.ParentPhone), t.FullName, t.Status)
-
-		responseStatus, err := SendWhatsAppMessage(t.ParentPhone, message)
-
-		deliveryStatus := "success"
-		if err != nil {
-			log.Printf("[WA] Gagal kirim ke %s: %v", t.ParentPhone, err)
-			deliveryStatus = "failed"
-			failed++
-		} else {
-			log.Printf("[WA] Sukses kirim ke %s buat %s", t.ParentPhone, t.FullName)
-			sent++
-		}
-
-		// catat ke tabel notification_logs
+		// catat ke tabel notification_logs dengan status "pending"
 		db.Create(&models.NotificationLogs{
 			UserID:         t.UserID,
 			Phone:          NormalizePhone(t.ParentPhone),
 			Status:         t.Status,
 			Message:        message,
 			SentDate:       today,
-			ResponseStatus: deliveryStatus + ": " + responseStatus,
+			ResponseStatus: "pending",
 		})
-
-		// rate limit 2 detik biar ga di-ban Meta
-		time.Sleep(2 * time.Second)
+		queued++
 	}
 
-	return sent, skipped, failed
+	return queued, skipped
+}
+
+// StartNotificationSender — background worker untuk memproses antrean pesan WA (pending)
+func StartNotificationSender(db *gorm.DB) {
+	go func() {
+		// Inisialisasi generator angka acak
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+		for {
+			time.Sleep(15 * time.Second) // Cek setiap 15 detik
+
+			// Cek apakah WhatsApp client terkoneksi
+			if WAClient == nil || !WAClient.IsConnected() {
+				continue
+			}
+
+			// Gunakan atomic flag untuk mencegah worker ganda berjalan bersamaan
+			if !atomic.CompareAndSwapInt32(&isSendingNotifications, 0, 1) {
+				continue
+			}
+
+			var pendingLogs []models.NotificationLogs
+			err := db.Where("response_status = ?", "pending").
+				Order("id ASC").
+				Find(&pendingLogs).Error
+
+			if err != nil {
+				log.Printf("[WA-SENDER] Gagal mengambil antrean: %v", err)
+				atomic.StoreInt32(&isSendingNotifications, 0)
+				continue
+			}
+
+			if len(pendingLogs) == 0 {
+				atomic.StoreInt32(&isSendingNotifications, 0)
+				continue
+			}
+
+			log.Printf("[WA-SENDER] Memproses %d pesan pending...", len(pendingLogs))
+
+			for _, l := range pendingLogs {
+				// Cek koneksi di tiap pengiriman pesan
+				if WAClient == nil || !WAClient.IsConnected() {
+					log.Println("[WA-SENDER] Koneksi terputus saat broadcast berjalan, menghentikan antrean.")
+					break
+				}
+
+				log.Printf("[WA-SENDER] Mengirim pesan ke %s (log ID: %d)...", l.Phone, l.ID)
+				responseStatus, err := SendWhatsAppMessage(l.Phone, l.Message)
+
+				deliveryStatus := "success: " + responseStatus
+				if err != nil {
+					log.Printf("[WA-SENDER] Gagal mengirim ke %s: %v", l.Phone, err)
+					deliveryStatus = "failed: " + err.Error()
+				} else {
+					log.Printf("[WA-SENDER] Sukses mengirim ke %s", l.Phone)
+				}
+
+				// Update status log di database
+				db.Model(&models.NotificationLogs{}).
+					Where("id = ?", l.ID).
+					Update("response_status", deliveryStatus)
+
+				// Jitter 3 - 7 detik biar ga gampang di-banned
+				jitter := time.Duration(3+r.Intn(5)) * time.Second
+				time.Sleep(jitter)
+			}
+
+			atomic.StoreInt32(&isSendingNotifications, 0)
+		}
+	}()
 }
 
 // NotifyPresentStudents — kirim notif hanya untuk siswa yang sudah HADIR (dipanggil setelah QR 1 expired)
@@ -188,11 +267,6 @@ func NotifyPresentStudents(db *gorm.DB) {
 
 	if settings["wa_enabled"] != "true" {
 		log.Println("[WA] Notifikasi WA lagi off.")
-		return
-	}
-
-	if WAClient == nil || !WAClient.IsConnected() {
-		log.Println("[WA] Client belum konek, skip dulu.")
 		return
 	}
 
@@ -220,12 +294,15 @@ func NotifyPresentStudents(db *gorm.DB) {
 	}
 
 	log.Printf("[WA] Total %d siswa masuk antrian notif hadir.", len(allTargets))
-	sent, skipped, failed := processNotificationBatch(db, allTargets, today)
-	log.Printf("[WA] Done (Hadir) — Terkirim: %d | Skip: %d | Gagal: %d", sent, skipped, failed)
+	queued, skipped := queueNotificationBatch(db, settings, allTargets, today)
+	log.Printf("[WA] Done (Hadir) — Dimasukkan ke antrean: %d | Skip: %d", queued, skipped)
 }
 
 // AutoAlfaAndNotify — set alfa untuk siswa tanpa log, lalu kirim notif telat/sakit/izin/alfa (dipanggil setelah QR 2 expired)
 func AutoAlfaAndNotify(db *gorm.DB) {
+	autoAlfaMutex.Lock()
+	defer autoAlfaMutex.Unlock()
+
 	// 1. Jalankan Auto-Alfa dulu
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	now := time.Now().In(loc)
@@ -236,18 +313,22 @@ func AutoAlfaAndNotify(db *gorm.DB) {
 	unattended, err := repo.GetUnattendedStudents(db)
 	if err != nil {
 		log.Printf("[WA] Gagal ambil siswa tanpa absen untuk auto-alfa: %v", err)
-	} else {
+	} else if len(unattended) > 0 {
+		var logsAbsensi []models.AttedanceLogs
 		for _, s := range unattended {
-			logAbsensi := models.AttedanceLogs{
+			logsAbsensi = append(logsAbsensi, models.AttedanceLogs{
 				UserID:      s.ID,
 				Status:      StatusAlfa,
 				ClockInTime: now,
-			}
-			if err := db.Create(&logAbsensi).Error; err != nil {
-				log.Printf("[WA] Gagal set alfa untuk siswa %d: %v", s.ID, err)
-			}
+			})
 		}
-		log.Printf("[WA] Auto-Alfa selesai: %d siswa ditandai ALFA.", len(unattended))
+		if err := db.Create(&logsAbsensi).Error; err != nil {
+			log.Printf("[WA] Gagal set alfa untuk siswa: %v", err)
+		} else {
+			log.Printf("[WA] Auto-Alfa selesai: %d siswa ditandai ALFA.", len(unattended))
+		}
+	} else {
+		log.Println("[WA] Auto-Alfa selesai: semua siswa sudah memiliki log absensi hari ini.")
 	}
 
 	// 2. Lanjut ke proses pengiriman notifikasi WA
@@ -259,11 +340,6 @@ func AutoAlfaAndNotify(db *gorm.DB) {
 
 	if settings["wa_enabled"] != "true" {
 		log.Println("[WA] Notifikasi WA lagi off.")
-		return
-	}
-
-	if WAClient == nil || !WAClient.IsConnected() {
-		log.Println("[WA] Client belum konek, skip dulu.")
 		return
 	}
 
@@ -291,10 +367,9 @@ func AutoAlfaAndNotify(db *gorm.DB) {
 	}
 
 	log.Printf("[WA] Total %d siswa masuk antrian notif telat/alfa/sakit/izin.", len(allTargets))
-	sent, skipped, failed := processNotificationBatch(db, allTargets, today)
-	log.Printf("[WA] Done (Lainnya) — Terkirim: %d | Skip: %d | Gagal: %d", sent, skipped, failed)
+	queued, skipped := queueNotificationBatch(db, settings, allTargets, today)
+	log.Printf("[WA] Done (Lainnya) — Dimasukkan ke antrean: %d | Skip: %d", queued, skipped)
 }
-
 
 // TestSendWhatsApp — kirim pesan test ke nomor tertentu (buat debugging)
 func TestSendWhatsApp(phone, message string) (string, error) {

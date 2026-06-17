@@ -39,6 +39,11 @@ func SeedNotificationSettings() error {
 			SettingValue: "Assalamualaikum, kami informasikan bahwa anak Bapak/Ibu *{nama}* (NISN: {nisn}, Kelas: {kelas}) hari ini tercatat *{status}*. Mohon perhatiannya. Terima kasih.",
 			Description:  "Template pesan WA",
 		},
+		{
+			SettingKey:   "school_name",
+			SettingValue: "SMK PLUS PELITA NUSANTARA",
+			Description:  "Nama Sekolah untuk Notifikasi WA",
+		},
 	}
 
 	for _, s := range defaults {
