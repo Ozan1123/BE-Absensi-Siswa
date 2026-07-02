@@ -6,5 +6,7 @@ type TokenReq struct {
 }
 
 type SubmitToken struct {
-	TokenCode string `json:"token_code"`
+	TokenCode string  `json:"token_code"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }

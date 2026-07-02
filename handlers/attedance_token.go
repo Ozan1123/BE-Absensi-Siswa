@@ -136,6 +136,15 @@ func SubmitToken(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Muatan tidak valid"})
 	}
 
+	// Validasi geofence (jarak dari sekolah)
+	if req.Latitude == 0 || req.Longitude == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Lokasi GPS diperlukan untuk melakukan absensi"})
+	}
+
+	if !utils.IsInsideSchool(req.Latitude, req.Longitude) {
+		return c.Status(400).JSON(fiber.Map{"error": "Kamu berada di luar area sekolah"})
+	}
+
 	// Verifikasi token
 	token, isExpired, err := utils.VerifyTokenCode(req.TokenCode)
 	if err != nil {
