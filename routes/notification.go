@@ -33,4 +33,6 @@ func SetupNotificationRoutes(api fiber.Router) {
 	attendance.Get("/students", middleware.AdminGuru, handlers.GetStudentsAttendanceToday)
 	attendance.Put("/status", middleware.AdminGuru, handlers.UpdateStudentStatus)
 	attendance.Get("/logs", middleware.AdminGuru, handlers.GetAttendanceLogsAdmin)
+	attendance.Get("/top-alfa", middleware.AdminGuru, handlers.GetTopAlfaStudents)
+	attendance.Get("/monthly-recap", middleware.AdminGuru, handlers.GetMonthlyRecap)
 }

@@ -147,28 +147,68 @@ func SubmitToken(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Token QR sudah kedaluwarsa, silakan minta QR yang baru"})
 	}
 
-	var count int64
-	database.DB.Model(&models.AttedanceLogs{}).
-		Where("user_id = ? AND token_id = ?", userID, token.ID).
-		Count(&count)
+	// Cek apakah hari ini user sudah memiliki log absensi
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	now := time.Now().In(loc)
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	end := start.Add(24 * time.Hour)
 
-	if count > 0 {
-		return c.Status(400).JSON(fiber.Map{
-			"error": "Kamu sudah melakukan absensi",
-		})
+	var existingLog models.AttedanceLogs
+	err = database.DB.
+		Where("user_id = ? AND clock_in_time >= ? AND clock_in_time < ?", userID, start, end).
+		First(&existingLog).Error
+
+	if err == nil {
+		// Log absensi sudah ada hari ini
+		if existingLog.Status == "hadir" || existingLog.Status == "sakit" || existingLog.Status == "alfa" {
+			return c.Status(400).JSON(fiber.Map{
+				"error": fmt.Sprintf("Kamu tidak bisa absen karena status hari ini adalah %s", existingLog.Status),
+			})
+		}
+
+		if existingLog.Status == "telat" {
+			if existingLog.TokenID != nil {
+				return c.Status(400).JSON(fiber.Map{
+					"error": "Kamu sudah melakukan absensi (telat)",
+				})
+			}
+
+			// Jika statusnya telat dan TokenID nil, ini adalah status telat otomatis dari QR hadir yang expired.
+			// Siswa memverifikasi kehadirannya dengan memindai QR telat.
+			if token.Category != "telat" {
+				return c.Status(400).JSON(fiber.Map{
+					"error": "Token tidak valid untuk status keterlambatan Anda",
+				})
+			}
+
+			ip := c.IP()
+			tokenID := token.ID
+			existingLog.TokenID = &tokenID
+			existingLog.CapturedIp = &ip
+			existingLog.ClockInTime = utils.Now()
+
+			if err := database.DB.Save(&existingLog).Error; err != nil {
+				return c.Status(500).JSON(fiber.Map{"error": "Gagal memperbarui status absensi"})
+			}
+
+			return c.Status(200).JSON(fiber.Map{
+				"message": "Success To Absen",
+				"status":  "telat",
+			})
+		}
 	}
 
-	// Tentukan status via service layer (berdasarkan kategori token)
+	// Jika belum ada log absensi sama sekali hari ini
 	status := services.DetermineAttendanceStatus(token)
-
-	now := utils.Now()
 	tokenID := token.ID
+	ip := c.IP()
 
 	log := models.AttedanceLogs{
 		UserID:      userID,
 		TokenID:     &tokenID,
 		Status:      status,
-		ClockInTime: now,
+		CapturedIp:  &ip,
+		ClockInTime: utils.Now(),
 	}
 
 	if err := database.DB.Create(&log).Error; err != nil {

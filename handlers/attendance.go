@@ -18,7 +18,7 @@ import (
 // @Param start_date query string false "Filter tanggal mulai (Format: YYYY-MM-DD)"
 // @Param end_date query string false "Filter tanggal selesai (Format: YYYY-MM-DD)"
 // @Param class_group query string false "Filter berdasarkan Kelas"
-// @Param status query string false "Filter berdasarkan Status (hadir, telat, alfa, sakit, izin)"
+// @Param status query string false "Filter berdasarkan Status (hadir, telat, alfa, sakit)"
 // @Param search query string false "Pencarian berdasarkan Nama atau NISN Siswa"
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]string
@@ -98,3 +98,92 @@ func GetAttendanceLogsAdmin(c *fiber.Ctx) error {
 		},
 	})
 }
+
+type TopAlfaStudent struct {
+	Name       string `json:"name"`
+	Nisn       string `json:"nisn"`
+	AlfaCount  int    `json:"alfaCount"`
+	ClassGroup string `json:"class_group"`
+}
+
+func GetTopAlfaStudents(c *fiber.Ctx) error {
+	var result []TopAlfaStudent
+
+	err := database.DB.Table("attedance_logs").
+		Select("users.full_name as name, users.nisn, COUNT(attedance_logs.id) as alfa_count, users.class_group").
+		Joins("JOIN users ON users.id = attedance_logs.user_id").
+		Where("attedance_logs.status = ? AND users.role = ?", "alfa", "siswa").
+		Group("users.id, users.full_name, users.nisn, users.class_group").
+		Order("alfa_count DESC").
+		Limit(10).
+		Scan(&result).Error
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "gagal mengambil data top alfa"})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "success",
+		"data":    result,
+	})
+}
+
+type MonthlyRecapData struct {
+	Month string `json:"month"`
+	Hadir int    `json:"Hadir"`
+	Sakit int    `json:"Sakit"`
+	Alfa  int    `json:"Alfa"`
+	Rate  int    `json:"rate"`
+}
+
+func GetMonthlyRecap(c *fiber.Ctx) error {
+	type DBRecap struct {
+		MonthKey  string `gorm:"column:month_key"`
+		MonthName string `gorm:"column:month_name"`
+		Hadir     int    `gorm:"column:hadir"`
+		Sakit     int    `gorm:"column:sakit"`
+		Alfa      int    `gorm:"column:alfa"`
+	}
+
+	var dbRecaps []DBRecap
+
+	// MySQL specific date formatting
+	err := database.DB.Table("attedance_logs").
+		Select(`
+			DATE_FORMAT(clock_in_time, '%Y-%m') as month_key,
+			DATE_FORMAT(clock_in_time, '%b %y') as month_name,
+			SUM(CASE WHEN status IN ('hadir', 'telat') THEN 1 ELSE 0 END) as hadir,
+			SUM(CASE WHEN status = 'sakit' THEN 1 ELSE 0 END) as sakit,
+			SUM(CASE WHEN status = 'alfa' THEN 1 ELSE 0 END) as alfa
+		`).
+		Group("month_key, month_name").
+		Order("month_key ASC").
+		Limit(12).
+		Scan(&dbRecaps).Error
+
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "gagal mengambil rekap bulanan"})
+	}
+
+	var result []MonthlyRecapData = []MonthlyRecapData{}
+	for _, r := range dbRecaps {
+		total := r.Hadir + r.Sakit + r.Alfa
+		rate := 0
+		if total > 0 {
+			rate = int((float64(r.Hadir) / float64(total)) * 100)
+		}
+		result = append(result, MonthlyRecapData{
+			Month: r.MonthName,
+			Hadir: r.Hadir,
+			Sakit: r.Sakit,
+			Alfa:  r.Alfa,
+			Rate:  rate,
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "success",
+		"data":    result,
+	})
+}
+

@@ -22,7 +22,6 @@ import (
 const (
 	StatusAlfa  = "alfa"
 	StatusSakit = "sakit"
-	StatusIzin  = "izin"
 )
 
 var (
@@ -132,12 +131,6 @@ func BuildNotificationMessage(settings map[string]string, nama, nisn, kelas, sta
 		body = fmt.Sprintf(
 			"Kami informasikan bahwa hari ini ananda *%s* tidak dapat mengikuti kegiatan belajar mengajar karena *SAKIT*. "+
 				"Kami pihak sekolah mendoakan agar ananda lekas sembuh dan dapat kembali beraktivitas seperti biasa.",
-			nama,
-		)
-	case StatusIzin:
-		body = fmt.Sprintf(
-			"Kami informasikan bahwa hari ini ananda *%s* tidak dapat mengikuti kegiatan belajar mengajar dengan keterangan *IZIN*. "+
-				"Terima kasih kepada Bapak/Ibu atas informasi yang telah disampaikan.",
 			nama,
 		)
 	default:
@@ -258,6 +251,7 @@ func StartNotificationSender(db *gorm.DB) {
 }
 
 // NotifyPresentStudents — kirim notif hanya untuk siswa yang sudah HADIR (dipanggil setelah QR 1 expired)
+// Serta menandai semua siswa yang BELUM melakukan absensi sebagai "telat".
 func NotifyPresentStudents(db *gorm.DB) {
 	settings, err := repo.GetNotificationSettingsMap(db)
 	if err != nil {
@@ -270,6 +264,33 @@ func NotifyPresentStudents(db *gorm.DB) {
 		return
 	}
 
+	// 1. Tandai siswa yang belum melakukan absensi hari ini sebagai "telat"
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	now := time.Now().In(loc)
+	log.Println("[WA] Menandai siswa yang belum absen sebagai TELAT setelah QR Hadir berakhir...")
+
+	unattended, err := repo.GetUnattendedStudents(db)
+	if err != nil {
+		log.Printf("[WA] Gagal ambil siswa tanpa absen untuk di-set telat: %v", err)
+	} else if len(unattended) > 0 {
+		var logsAbsensi []models.AttedanceLogs
+		for _, s := range unattended {
+			logsAbsensi = append(logsAbsensi, models.AttedanceLogs{
+				UserID:      s.ID,
+				Status:      "telat",
+				ClockInTime: now,
+			})
+		}
+		if err := db.Create(&logsAbsensi).Error; err != nil {
+			log.Printf("[WA] Gagal set telat untuk siswa: %v", err)
+		} else {
+			log.Printf("[WA] Selesai menandai %d siswa sebagai TELAT.", len(unattended))
+		}
+	} else {
+		log.Println("[WA] Semua siswa sudah memiliki log absensi hari ini.")
+	}
+
+	// 2. Kirim notifikasi untuk siswa yang HADIR
 	today := repo.TodayDateString()
 	var allTargets []notifTarget
 
@@ -298,7 +319,7 @@ func NotifyPresentStudents(db *gorm.DB) {
 	log.Printf("[WA] Done (Hadir) — Dimasukkan ke antrean: %d | Skip: %d", queued, skipped)
 }
 
-// AutoAlfaAndNotify — set alfa untuk siswa tanpa log, lalu kirim notif telat/sakit/izin/alfa (dipanggil setelah QR 2 expired)
+// AutoAlfaAndNotify — set alfa untuk siswa tanpa log, lalu kirim notif telat/sakit/alfa (dipanggil setelah QR 2 expired)
 func AutoAlfaAndNotify(db *gorm.DB) {
 	autoAlfaMutex.Lock()
 	defer autoAlfaMutex.Unlock()
@@ -306,29 +327,36 @@ func AutoAlfaAndNotify(db *gorm.DB) {
 	// 1. Jalankan Auto-Alfa dulu
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	now := time.Now().In(loc)
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	end := start.Add(24 * time.Hour)
 
 	log.Println("[WA] Memulai proses Auto-Alfa...")
 	
-	// Cari siswa yang belum absen hari ini
-	unattended, err := repo.GetUnattendedStudents(db)
+	// Cari log absensi hari ini yang berstatus 'telat' tapi tidak di-scan (TokenID IS NULL)
+	var unscannedLogs []models.AttedanceLogs
+	err := db.Where("status = ? AND token_id IS NULL AND clock_in_time >= ? AND clock_in_time < ?", "telat", start, end).
+		Find(&unscannedLogs).Error
+
 	if err != nil {
-		log.Printf("[WA] Gagal ambil siswa tanpa absen untuk auto-alfa: %v", err)
-	} else if len(unattended) > 0 {
-		var logsAbsensi []models.AttedanceLogs
-		for _, s := range unattended {
-			logsAbsensi = append(logsAbsensi, models.AttedanceLogs{
-				UserID:      s.ID,
-				Status:      StatusAlfa,
-				ClockInTime: now,
-			})
+		log.Printf("[WA] Gagal mengambil log telat unscanned: %v", err)
+	} else if len(unscannedLogs) > 0 {
+		var unscannedIDs []int64
+		for _, l := range unscannedLogs {
+			unscannedIDs = append(unscannedIDs, l.ID)
 		}
-		if err := db.Create(&logsAbsensi).Error; err != nil {
-			log.Printf("[WA] Gagal set alfa untuk siswa: %v", err)
+		
+		// Update status mereka dari 'telat' menjadi 'alfa'
+		err = db.Model(&models.AttedanceLogs{}).
+			Where("id IN ?", unscannedIDs).
+			Update("status", StatusAlfa).Error
+
+		if err != nil {
+			log.Printf("[WA] Gagal mengubah status unscanned telat ke alfa: %v", err)
 		} else {
-			log.Printf("[WA] Auto-Alfa selesai: %d siswa ditandai ALFA.", len(unattended))
+			log.Printf("[WA] Auto-Alfa selesai: %d siswa diubah dari TELAT menjadi ALFA.", len(unscannedLogs))
 		}
 	} else {
-		log.Println("[WA] Auto-Alfa selesai: semua siswa sudah memiliki log absensi hari ini.")
+		log.Println("[WA] Auto-Alfa selesai: tidak ada siswa berstatus TELAT yang tidak di-scan.")
 	}
 
 	// 2. Lanjut ke proses pengiriman notifikasi WA
@@ -346,8 +374,8 @@ func AutoAlfaAndNotify(db *gorm.DB) {
 	today := repo.TodayDateString()
 	var allTargets []notifTarget
 
-	// Tarik data siswa ALFA, SAKIT, IZIN, TELAT (semua kecuali hadir)
-	targetStudents, err := repo.GetStudentsByStatusToday(db, []string{StatusAlfa, StatusSakit, StatusIzin, "telat"})
+	// Tarik data siswa ALFA, SAKIT, TELAT (semua kecuali hadir)
+	targetStudents, err := repo.GetStudentsByStatusToday(db, []string{StatusAlfa, StatusSakit, "telat"})
 	if err != nil {
 		log.Printf("[WA] Gagal ambil data target notif: %v", err)
 	} else {
@@ -362,11 +390,11 @@ func AutoAlfaAndNotify(db *gorm.DB) {
 	}
 
 	if len(allTargets) == 0 {
-		log.Println("[WA] Ga ada siswa yg perlu dinotif telat/alfa/sakit/izin.")
+		log.Println("[WA] Ga ada siswa yg perlu dinotif telat/alfa/sakit.")
 		return
 	}
 
-	log.Printf("[WA] Total %d siswa masuk antrian notif telat/alfa/sakit/izin.", len(allTargets))
+	log.Printf("[WA] Total %d siswa masuk antrian notif telat/alfa/sakit.", len(allTargets))
 	queued, skipped := queueNotificationBatch(db, settings, allTargets, today)
 	log.Printf("[WA] Done (Lainnya) — Dimasukkan ke antrean: %d | Skip: %d", queued, skipped)
 }
