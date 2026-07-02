@@ -16,7 +16,7 @@ func SetupRouteAttedanceToken(api fiber.Router) {
 	token.Post("/create/telat", middleware.AdminOnly, handlers.CreateTokenTelat)
 	token.Post("/absen", middleware.SiswaOnly, handlers.SubmitToken)
 
-	token.Get("/qr_code/active", handlers.GetActiveTokens)
-	token.Get("/:id/image", handlers.GetTokenQRImage)
+	token.Get("/qr_code/active", middleware.AdminGuru, handlers.GetActiveTokens)
+	token.Get("/:id/image", middleware.AdminGuru, handlers.GetTokenQRImage)
 	token.Post("/:id/deactivate", middleware.AdminOnly, handlers.DeactivateToken)
 }
