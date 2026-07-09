@@ -20,7 +20,7 @@ type TestWAReq struct {
 // UpdateStudentStatusReq untuk guru/admin set status siswa
 type UpdateStudentStatusReq struct {
 	UserID int64  `json:"user_id" validate:"required"`
-	Status string `json:"status" validate:"required"` // sakit, izin, alfa
+	Status string `json:"status" validate:"required"` // sakit, alfa
 }
 
 // PairWAReq untuk request pairing code WA dari FE

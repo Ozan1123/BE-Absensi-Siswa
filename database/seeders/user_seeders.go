@@ -27,16 +27,35 @@ func SeedUsersFromExcel(path string) error {
 			continue // skip header
 		}
 
+		if len(row) < 4 {
+			log.Printf("skip baris %d: kolom kurang dari 4", i+1)
+			continue
+		}
+
+		// Akses kolom secara aman dengan nilai default
+		classGroup := ""
+		if len(row) > 4 {
+			classGroup = row[4]
+		}
+		role := "siswa"
+		if len(row) > 5 && row[5] != "" {
+			role = row[5]
+		}
+		parentPhone := ""
+		if len(row) > 6 {
+			parentPhone = row[6]
+		}
+
 		passwordHash, _ := bcrypt.GenerateFromPassword([]byte(row[3]), bcrypt.DefaultCost)
 
 		user := models.Users{
-			Nisn:       row[0],
-			FullName:   row[1],
-			Username:   row[2],
-			Password:   string(passwordHash),
-			Role:       row[5],
-			ClassGroup: row[4],
-			ParentPhone: row[6],
+			Nisn:        row[0],
+			FullName:    row[1],
+			Username:    row[2],
+			Password:    string(passwordHash),
+			Role:        role,
+			ClassGroup:  classGroup,
+			ParentPhone: parentPhone,
 		}
 
 		// hindari duplicate username

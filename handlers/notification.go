@@ -165,9 +165,9 @@ func UpdateStudentStatus(c *fiber.Ctx) error {
 	}
 
 	// Validasi status
-	validStatuses := map[string]bool{"sakit": true, "izin": true, "alfa": true}
+	validStatuses := map[string]bool{"hadir": true, "telat": true, "sakit": true, "alfa": true, "belum_absen": true}
 	if !validStatuses[req.Status] {
-		return c.Status(400).JSON(fiber.Map{"error": "status harus salah satu dari: sakit, izin, alfa"})
+		return c.Status(400).JSON(fiber.Map{"error": "status harus salah satu dari: hadir, telat, sakit, alfa, belum_absen"})
 	}
 
 	// Cek apakah user ada
@@ -182,6 +182,26 @@ func UpdateStudentStatus(c *fiber.Ctx) error {
 
 	now := utils.Now()
 	today := now.Format("2006-01-02")
+
+	// Jika status diubah menjadi belum_absen, hapus log absensi hari ini jika ada
+	if req.Status == "belum_absen" {
+		err := database.DB.
+			Where("user_id = ? AND DATE(clock_in_time) = ?", req.UserID, today).
+			Delete(&models.AttedanceLogs{}).Error
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "gagal menghapus log absensi"})
+		}
+
+		return c.JSON(fiber.Map{
+			"message": "status siswa berhasil di-reset (belum absen)",
+			"data": fiber.Map{
+				"user_id":   req.UserID,
+				"full_name": user.FullName,
+				"status":    "belum_absen",
+				"updated":   true,
+			},
+		})
+	}
 
 	// Cek apakah sudah ada log hari ini
 	var existingLog models.AttedanceLogs
@@ -318,14 +338,14 @@ func LogoutWA(c *fiber.Ctx) error {
 
 // GetStudentsAttendanceToday godoc
 // @Summary Ambil daftar semua siswa + status absensi hari ini
-// @Description Menampilkan semua siswa beserta status absensi hari ini (hadir/telat/alfa/sakit/izin/belum_absen).
+// @Description Menampilkan semua siswa beserta status absensi hari ini (hadir/telat/alfa/sakit/belum_absen).
 //
 //	Bisa filter per kelas dan per status.
 //
 // @Tags attendance
 // @Produce json
 // @Param class_group query string false "Filter berdasarkan kelas (contoh: XII-RPL-1)"
-// @Param status query string false "Filter berdasarkan status (hadir/telat/alfa/sakit/izin/belum_absen)"
+// @Param status query string false "Filter berdasarkan status (hadir/telat/alfa/sakit/belum_absen)"
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]string
 // @Security BearerAuth
@@ -388,7 +408,6 @@ func GetStudentsAttendanceToday(c *fiber.Ctx) error {
 		telat       int
 		alfa        int
 		sakit       int
-		izin        int
 		belumAbsen  int
 	)
 
@@ -429,8 +448,6 @@ func GetStudentsAttendanceToday(c *fiber.Ctx) error {
 			alfa++
 		case "sakit":
 			sakit++
-		case "izin":
-			izin++
 		default:
 			belumAbsen++
 		}
@@ -456,7 +473,6 @@ func GetStudentsAttendanceToday(c *fiber.Ctx) error {
 			"telat":       telat,
 			"alfa":        alfa,
 			"sakit":       sakit,
-			"izin":        izin,
 			"belum_absen": belumAbsen,
 		},
 		"data": result,

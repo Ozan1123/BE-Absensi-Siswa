@@ -16,6 +16,8 @@ func GetDashboardData() (*responses.DashboardResponse, error) {
 		todayAttendances int64
 		todayHadir       int64
 		todayTelat       int64
+		todayAlfa        int64
+		todaySakit       int64
 	)
 
 	now := time.Now()
@@ -57,6 +59,18 @@ func GetDashboardData() (*responses.DashboardResponse, error) {
 		return nil, err
 	}
 
+	if err := database.DB.Model(&models.AttedanceLogs{}).
+		Where("clock_in_time >= ? AND clock_in_time < ? AND status = ?", start, end, "alfa").
+		Count(&todayAlfa).Error; err != nil {
+		return nil, err
+	}
+
+	if err := database.DB.Model(&models.AttedanceLogs{}).
+		Where("clock_in_time >= ? AND clock_in_time < ? AND status = ?", start, end, "sakit").
+		Count(&todaySakit).Error; err != nil {
+		return nil, err
+	}
+
 	return &responses.DashboardResponse{
 		TotalTokens:       int(totalTokens),
 		TokenHariIni:      int(todayTokens),
@@ -64,8 +78,7 @@ func GetDashboardData() (*responses.DashboardResponse, error) {
 		TotalAbsenHariIni: int(todayAttendances),
 		TotalHadir:        int(todayHadir),
 		TotalTelat:        int(todayTelat),
+		TotalAlfa:         int(todayAlfa),
+		TotalSakit:        int(todaySakit),
 	}, nil
 }
-
-
-

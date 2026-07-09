@@ -99,6 +99,16 @@ func IsNotificationSentToday(db *gorm.DB, userID int64, status string, today str
 	return count > 0
 }
 
+// IsNotificationSentOrPendingToday — cek udah pernah kirim (success) atau sedang antre (pending) notif buat user+status ini hari ini
+func IsNotificationSentOrPendingToday(db *gorm.DB, userID int64, status string, today string) bool {
+	var count int64
+	db.Model(&models.NotificationLogs{}).
+		Where("user_id = ? AND status = ? AND sent_date = ? AND (response_status LIKE ? OR response_status = ?)",
+			userID, status, today, "success%", "pending").
+		Count(&count)
+	return count > 0
+}
+
 // TodayDateString — return tanggal hari ini format YYYY-MM-DD (WIB)
 func TodayDateString() string {
 	loc, _ := time.LoadLocation("Asia/Jakarta")

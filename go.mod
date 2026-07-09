@@ -3,7 +3,7 @@ module github.com/KicauOrgspark/BE-Absensi-Siswa
 go 1.25.0
 
 require (
-	github.com/gofiber/fiber/v2 v2.52.10
+	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/joho/godotenv v1.5.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
@@ -45,6 +45,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.44 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/petermattis/goid v0.0.0-20260330135022-df67b199bc81 // indirect
+	github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
@@ -52,6 +53,7 @@ require (
 	github.com/rs/zerolog v1.35.0 // indirect
 	github.com/swaggo/files v1.0.1 // indirect
 	github.com/tiendc/go-deepcopy v1.7.1 // indirect
+	github.com/tinylib/msgp v1.2.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.51.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect

@@ -39,6 +39,10 @@ func GenerateAttendanceExcel(kelas, jurusan, tanggal string) (*excelize.File, er
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#F8CBAD"}, Pattern: 1},
 	})
 
+	sakitStyle, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#BDD7EE"}, Pattern: 1},
+	})
+
 	// =====================
 	// HEADER
 	// =====================
@@ -55,27 +59,41 @@ func GenerateAttendanceExcel(kelas, jurusan, tanggal string) (*excelize.File, er
 	// =====================
 	hadir := 0
 	telat := 0
+	alfa := 0
+	sakit := 0
 	belum := 0
 
 	for i, r := range rows {
 
 		row := i + 2
 
-		status := "alfa"
+		status := "belum_absen"
 		waktu := "-"
 
 		style := absenStyle
 
-		if r.Status != nil && r.ClockInTime != nil {
+		if r.Status != nil {
 			status = *r.Status
-			waktu = r.ClockInTime.Format("2006-01-02 15:04:05")
 
-			if status == "hadir" {
+			if r.ClockInTime != nil {
+				waktu = r.ClockInTime.Format("2006-01-02 15:04:05")
+			}
+
+			switch status {
+			case "hadir":
 				hadir++
 				style = hadirStyle
-			} else {
+			case "telat":
 				telat++
 				style = telatStyle
+			case "alfa":
+				alfa++
+				style = absenStyle
+			case "sakit":
+				sakit++
+				style = sakitStyle
+			default:
+				belum++
 			}
 		} else {
 			belum++
@@ -103,11 +121,18 @@ func GenerateAttendanceExcel(kelas, jurusan, tanggal string) (*excelize.File, er
 	f.SetCellValue(summary, "A2", "Total Telat")
 	f.SetCellValue(summary, "B2", telat)
 
-	f.SetCellValue(summary, "A3", "Belum Absen")
-	f.SetCellValue(summary, "B3", belum)
+	f.SetCellValue(summary, "A3", "Total Alfa")
+	f.SetCellValue(summary, "B3", alfa)
 
-	f.SetCellValue(summary, "A4", "Total Siswa")
-	f.SetCellValue(summary, "B4", len(rows))
+	f.SetCellValue(summary, "A4", "Total Sakit")
+	f.SetCellValue(summary, "B4", sakit)
+
+	f.SetCellValue(summary, "A5", "Belum Absen")
+	f.SetCellValue(summary, "B5", belum)
+
+	f.SetCellValue(summary, "A6", "Total Siswa")
+	f.SetCellValue(summary, "B6", len(rows))
 
 	return f, nil
 }
+

@@ -13,5 +13,6 @@ func ToUserResponse(u models.Users) responses.UserRes {
 		Username: u.Username,
 		Role: u.Role,
 		ClassGroup: u.ClassGroup,
+		ParentPhone: u.ParentPhone,
 	}
 }
