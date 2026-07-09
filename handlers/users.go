@@ -140,10 +140,8 @@ func CreateUser(c *fiber.Ctx) error {
 	if req.Password == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "password wajib diisi"})
 	}
-	if req.Role == "" {
-		return c.Status(400).JSON(fiber.Map{"error": "role wajib diisi"})
-	}
-	if req.Role == "siswa" && req.Nisn == "" {
+
+	if  req.Nisn == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "NISN wajib diisi untuk siswa"})
 	}
 

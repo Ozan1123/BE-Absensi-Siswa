@@ -11,4 +11,5 @@ func SetupAuthRoute(api fiber.Router) {
 
 	auth.Post("/login", handlers.Login)
 	auth.Get("/me", middleware.AllRoles, handlers.Me)
+	auth.Post("/register", middleware.AllRoles, handlers.CreateUser)
 }
