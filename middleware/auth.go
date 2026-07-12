@@ -25,7 +25,7 @@ func AuthMiddleware(allowedRoles ...string) fiber.Handler {
 
 		token, err := utils.VerifyToken(tokenStr)
 		if err != nil || !token.Valid {
-			return c.Status(401).JSON(fiber.Map{"error": "invalid jwt token"})
+			return c.Status(401).JSON(fiber.Map{"error": err.Error()})
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)

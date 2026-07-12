@@ -9,3 +9,15 @@ type LogsRes struct {
 	CapturedIp  *string   `json:"captured_ip"`
 	ClockInTime time.Time `json:"clock_in_time"`
 }
+
+type LogResMini struct {
+	ID          uint       `json:"id"`
+	Status      string     `json:"status"`
+	CapturedIP  *string    `json:"captured_ip"`
+	ClockInTime time.Time  `json:"clock_in_time"`
+}
+
+type LogResponse struct {
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+}

@@ -1,12 +1,11 @@
 package handlers
 
 import (
-	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
-	"github.com/KicauOrgspark/BE-Absensi-Siswa/mappers"
-	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
+	"strconv"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/services"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/dto/requests"
 	"github.com/gofiber/fiber/v2"
 )
-
 
 // GetAllLogs godoc
 // @Summary Ambil semua log absensi user
@@ -20,10 +19,19 @@ import (
 func GetAllLogs(c *fiber.Ctx) error {
 	userID := c.Locals("user_id").(int64)
 
-	var logs []models.AttedanceLogs
-	if err := database.DB.Preload("User").Where("user_id = ?", userID).Find(&logs).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{"error" : "not found user logs"})
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	limit, _ := strconv.Atoi(c.Query("limit", "10"))
+
+	query := requests.LogQuery{
+		Page:   page,
+		Limit:  limit,
+		Search: c.Query("search", ""),
 	}
 
-	return c.Status(200).JSON(fiber.Map{"Message" : "Found User Logs", "data" : mappers.ListToLogsResponse(logs)})
+	data, err := services.GetLogService(userID, query)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(200).JSON(data)
 }
