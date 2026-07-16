@@ -39,6 +39,7 @@ func main() {
 		&models.AttedanceLogs{},
 		&models.NotificationSettings{},
 		&models.NotificationLogs{},
+		&models.AdminNotifications{},
 	)
 
 	// Inisialisasi WhatsApp client di background (non-blocking)
@@ -64,6 +65,9 @@ func main() {
 
 	//start background notification sender
 	services.StartNotificationSender(database.DB)
+
+	//start cron scheduler
+	services.InitCronScheduler()
 
 	app := fiber.New()
 

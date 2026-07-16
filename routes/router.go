@@ -16,4 +16,5 @@ func SetupRoutes(app *fiber.App) {
 	SetupNotificationRoutes(api)
 	SetupRouteClasses(api)
 	SetupRouteUsers(api)
+	SetupAdminNotificationRoutes(api)
 }
