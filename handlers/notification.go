@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"time"
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
@@ -411,6 +412,12 @@ func GetStudentsAttendanceToday(c *fiber.Ctx) error {
 		belumAbsen  int
 	)
 
+	type DeptStat struct {
+		Total int `json:"total"`
+		Hadir int `json:"hadir"`
+	}
+	deptStats := make(map[string]*DeptStat)
+
 	type StudentResponse struct {
 		ID          int64  `json:"id"`
 		Nisn        string `json:"nisn"`
@@ -453,6 +460,20 @@ func GetStudentsAttendanceToday(c *fiber.Ctx) error {
 		}
 		totalSiswa++
 
+		// Extract jurusan dari class_group (misal: "X-RPL-1" -> "RPL", "RPL" -> "RPL")
+		jurusan := r.ClassGroup
+		parts := strings.Split(r.ClassGroup, "-")
+		if len(parts) >= 2 {
+			jurusan = parts[1]
+		}
+		if _, ok := deptStats[jurusan]; !ok {
+			deptStats[jurusan] = &DeptStat{}
+		}
+		deptStats[jurusan].Total++
+		if status == "hadir" || status == "telat" {
+			deptStats[jurusan].Hadir++
+		}
+
 		result = append(result, StudentResponse{
 			ID:          r.ID,
 			Nisn:        r.Nisn,
@@ -474,6 +495,7 @@ func GetStudentsAttendanceToday(c *fiber.Ctx) error {
 			"alfa":        alfa,
 			"sakit":       sakit,
 			"belum_absen": belumAbsen,
+			"departments": deptStats,
 		},
 		"data": result,
 	})

@@ -221,6 +221,7 @@ func StartNotificationSender(db *gorm.DB) {
 				// Cek koneksi di tiap pengiriman pesan
 				if WAClient == nil || !WAClient.IsConnected() {
 					log.Println("[WA-SENDER] Koneksi terputus saat broadcast berjalan, menghentikan antrean.")
+					repo.InsertNotification("Koneksi WhatsApp Terputus", "Koneksi terputus saat broadcast berjalan", "WA error")
 					break
 				}
 
@@ -231,6 +232,7 @@ func StartNotificationSender(db *gorm.DB) {
 				if err != nil {
 					log.Printf("[WA-SENDER] Gagal mengirim ke %s: %v", l.Phone, err)
 					deliveryStatus = "failed: " + err.Error()
+					repo.InsertNotification("Gagal Kirim Pesan WA", fmt.Sprintf("Gagal mengirim pesan ke %s: %v", l.Phone, err), "WA error")
 				} else {
 					log.Printf("[WA-SENDER] Sukses mengirim ke %s", l.Phone)
 				}
