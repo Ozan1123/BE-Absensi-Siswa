@@ -23,3 +23,15 @@ func GetUnreadNotifications() ([]models.AdminNotifications, error) {
 func MarkAsRead(id int64) error {
 	return database.DB.Model(&models.AdminNotifications{}).Where("id = ?", id).Update("is_read", true).Error
 }
+
+func MarkAllAsRead() error {
+	return database.DB.Model(&models.AdminNotifications{}).Where("is_read = ?", false).Update("is_read", true).Error
+}
+
+func DeleteNotifications(ids []int64) error {
+	return database.DB.Where("id IN ?", ids).Delete(&models.AdminNotifications{}).Error
+}
+
+func DeleteAllNotifications() error {
+	return database.DB.Where("1 = 1").Delete(&models.AdminNotifications{}).Error
+}
