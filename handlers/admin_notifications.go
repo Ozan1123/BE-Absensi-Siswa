@@ -43,3 +43,63 @@ func ReadNotif(c *fiber.Ctx) error {
 		"message": "Notifikasi ditandai sebagai sudah dibaca",
 	})
 }
+
+func ReadAllNotifs(c *fiber.Ctx) error {
+	err := repo.MarkAllAsRead()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Gagal menandai semua notifikasi",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Semua notifikasi ditandai sebagai sudah dibaca",
+	})
+}
+
+func DeleteSelectedNotifs(c *fiber.Ctx) error {
+	var payload struct {
+		IDs []int64 `json:"ids"`
+	}
+
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Format request tidak valid",
+			"error":   err.Error(),
+		})
+	}
+
+	if len(payload.IDs) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "IDs tidak boleh kosong",
+		})
+	}
+
+	err := repo.DeleteNotifications(payload.IDs)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Gagal menghapus notifikasi",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Notifikasi berhasil dihapus",
+	})
+}
+
+func DeleteAllNotifs(c *fiber.Ctx) error {
+	err := repo.DeleteAllNotifications()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Gagal menghapus semua notifikasi",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Semua notifikasi berhasil dihapus",
+	})
+}
+
