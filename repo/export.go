@@ -15,9 +15,9 @@ type ExportRow struct {
 	ClockInTime *time.Time
 }
 
-func GetAttendanceRows(kelas, jurusan, tanggal string) ([]ExportRow, error) {
+func GetAttendanceRows(kelas, jurusan, startDate, endDate string) ([]ExportRow, error) {
 
-	start, end, err := utils.DayRange(tanggal)
+	start, end, err := utils.DateRange(startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ func GetAttendanceRows(kelas, jurusan, tanggal string) ([]ExportRow, error) {
 			LEFT JOIN (
 				SELECT user_id, status, clock_in_time
 				FROM attedance_logs
-				WHERE clock_in_time >= ? AND clock_in_time < ?
+				WHERE clock_in_time >= ? AND clock_in_time <= ?
 			) l ON l.user_id = u.id
 		`, start, end).
 		Where("u.role = ?", "siswa")
