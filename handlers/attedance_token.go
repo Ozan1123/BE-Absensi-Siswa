@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
@@ -156,19 +157,31 @@ func SubmitToken(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Token QR sudah kedaluwarsa, silakan minta QR yang baru"})
 	}
 
-	// Cek apakah hari ini user sudah memiliki log absensi
+	// ── Gunakan Transaction untuk menghindari Race Condition ──
+	tx := database.DB.Begin()
+	if tx.Error != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Gagal memulai transaksi"})
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// SELECT FOR UPDATE: kunci baris agar request lain menunggu
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	now := time.Now().In(loc)
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	end := start.Add(24 * time.Hour)
 
 	var existingLog models.AttedanceLogs
-	err = database.DB.
+	err = tx.Set("gorm:query_option", "FOR UPDATE").
 		Where("user_id = ? AND clock_in_time >= ? AND clock_in_time < ?", userID, start, end).
 		First(&existingLog).Error
 
 	if err == nil {
 		// Log absensi sudah ada hari ini
+		tx.Rollback()
 		if existingLog.Status == "hadir" || existingLog.Status == "sakit" || existingLog.Status == "alfa" {
 			return c.Status(400).JSON(fiber.Map{
 				"error": fmt.Sprintf("Kamu tidak bisa absen karena status hari ini adalah %s", existingLog.Status),
@@ -182,8 +195,6 @@ func SubmitToken(c *fiber.Ctx) error {
 				})
 			}
 
-			// Jika statusnya telat dan TokenID nil, ini adalah status telat otomatis dari QR hadir yang expired.
-			// Siswa memverifikasi kehadirannya dengan memindai QR telat.
 			if token.Category != "telat" {
 				return c.Status(400).JSON(fiber.Map{
 					"error": "Token tidak valid untuk status keterlambatan Anda",
@@ -196,6 +207,7 @@ func SubmitToken(c *fiber.Ctx) error {
 			existingLog.CapturedIp = &ip
 			existingLog.ClockInTime = utils.Now()
 
+			// Gunakan tx baru karena yang lama sudah di-Rollback
 			if err := database.DB.Save(&existingLog).Error; err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": "Gagal memperbarui status absensi"})
 			}
@@ -220,8 +232,21 @@ func SubmitToken(c *fiber.Ctx) error {
 		ClockInTime: utils.Now(),
 	}
 
-	if err := database.DB.Create(&log).Error; err != nil {
+	if err := tx.Create(&log).Error; err != nil {
+		tx.Rollback()
+		// Jika error adalah duplicate entry (dari UNIQUE INDEX), anggap sukses
+		// karena artinya request lain sudah berhasil duluan
+		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "1062") {
+			return c.Status(200).JSON(fiber.Map{
+				"message": "Success To Absen",
+				"status":  status,
+			})
+		}
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Gagal menyimpan absensi"})
 	}
 
 	return c.Status(200).JSON(fiber.Map{
