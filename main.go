@@ -73,7 +73,7 @@ func main() {
 
 	app.Get("/swagger/*", fiberSwagger.WrapHandler)
 
-	app.Use(cors.New(cors.Config{AllowOrigins: "http://localhost:5173,https://www.reihan.biz.id",
+	app.Use(cors.New(cors.Config{AllowOrigins: "http://localhost:3052,https://api.smart-presence.smkpluspnb.sch.id",
 		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,OPTIONS",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true, //jika pake jwt
