@@ -7,9 +7,9 @@ import (
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/repo"
 )
 
-func GenerateAttendanceExcel(kelas, jurusan, tanggal string) (*excelize.File, error) {
+func GenerateAttendanceExcel(kelas, jurusan, startDate, endDate string) (*excelize.File, error) {
 
-	rows, err := repo.GetAttendanceRows(kelas, jurusan, tanggal)
+	rows, err := repo.GetAttendanceRows(kelas, jurusan, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
