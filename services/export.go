@@ -1,17 +1,30 @@
 package services
 
 import (
-	"fmt"
+	"time"
+
 	"github.com/xuri/excelize/v2"
 
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/repo"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/utils"
 )
 
 func GenerateAttendanceExcel(kelas, jurusan, startDate, endDate string) (*excelize.File, error) {
 
-	rows, err := repo.GetAttendanceRows(kelas, jurusan, startDate, endDate)
+	users, err := repo.GetAttendanceRows(kelas, jurusan, startDate, endDate)
 	if err != nil {
 		return nil, err
+	}
+
+	start, end, err := utils.DateRange(startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate all dates in range
+	var dateList []time.Time
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		dateList = append(dateList, d)
 	}
 
 	f := excelize.NewFile()
@@ -30,15 +43,12 @@ func GenerateAttendanceExcel(kelas, jurusan, startDate, endDate string) (*exceli
 	hadirStyle, _ := f.NewStyle(&excelize.Style{
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#C6EFCE"}, Pattern: 1},
 	})
-
 	telatStyle, _ := f.NewStyle(&excelize.Style{
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#FFD966"}, Pattern: 1},
 	})
-
 	absenStyle, _ := f.NewStyle(&excelize.Style{
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#F8CBAD"}, Pattern: 1},
 	})
-
 	sakitStyle, _ := f.NewStyle(&excelize.Style{
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#BDD7EE"}, Pattern: 1},
 	})
@@ -46,67 +56,130 @@ func GenerateAttendanceExcel(kelas, jurusan, startDate, endDate string) (*exceli
 	// =====================
 	// HEADER
 	// =====================
-	headers := []string{"No", "NISN", "Nama", "Kelas", "Status", "Waktu"}
+	colIndex := 1
+	rowIndex := 1
 
-	for i, h := range headers {
-		cell := fmt.Sprintf("%c1", 'A'+i)
+	staticHeaders := []string{"No", "NISN", "Nama", "Kelas"}
+	for _, h := range staticHeaders {
+		cell, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
 		f.SetCellValue(sheet, cell, h)
 		f.SetCellStyle(sheet, cell, cell, headerStyle)
+		colIndex++
+	}
+
+	for _, d := range dateList {
+		cell, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cell, d.Format("02-Jan"))
+		f.SetCellStyle(sheet, cell, cell, headerStyle)
+		colIndex++
+	}
+
+	summaryHeaders := []string{"Total Hadir", "Total Sakit", "Total Izin", "Total Telat", "Total Alfa"}
+	for _, h := range summaryHeaders {
+		cell, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cell, h)
+		f.SetCellStyle(sheet, cell, cell, headerStyle)
+		colIndex++
 	}
 
 	// =====================
 	// DATA + SUMMARY
 	// =====================
-	hadir := 0
-	telat := 0
-	alfa := 0
-	sakit := 0
-	belum := 0
+	globalHadir, globalTelat, globalAlfa, globalSakit, globalIzin, globalBelum := 0, 0, 0, 0, 0, 0
 
-	for i, r := range rows {
+	rowIndex = 2
+	for i, u := range users {
+		colIndex = 1
 
-		row := i + 2
+		// Static Info
+		cellNo, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cellNo, i+1)
+		colIndex++
 
-		status := "belum_absen"
-		waktu := "-"
+		cellNisn, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cellNisn, u.Nisn)
+		colIndex++
 
-		style := absenStyle
+		cellNama, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cellNama, u.FullName)
+		colIndex++
 
-		if r.Status != nil {
-			status = *r.Status
+		cellKelas, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cellKelas, u.ClassGroup)
+		colIndex++
 
-			if r.ClockInTime != nil {
-				waktu = r.ClockInTime.Format("2006-01-02 15:04:05")
+		// Map Logs
+		logMap := make(map[string]string)
+		for _, log := range u.AttedanceLogs {
+			if !log.ClockInTime.IsZero() {
+				dateStr := log.ClockInTime.Format("2006-01-02")
+				logMap[dateStr] = log.Status
 			}
-
-			switch status {
-			case "hadir":
-				hadir++
-				style = hadirStyle
-			case "telat":
-				telat++
-				style = telatStyle
-			case "alfa":
-				alfa++
-				style = absenStyle
-			case "sakit":
-				sakit++
-				style = sakitStyle
-			default:
-				belum++
-			}
-		} else {
-			belum++
 		}
 
-		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), i+1)
-		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), r.Nisn)
-		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), r.FullName)
-		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), r.ClassGroup)
-		f.SetCellValue(sheet, fmt.Sprintf("E%d", row), status)
-		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), waktu)
+		userHadir, userSakit, userIzin, userTelat, userAlfa := 0, 0, 0, 0, 0
 
-		f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("F%d", row), style)
+		for _, d := range dateList {
+			dateStr := d.Format("2006-01-02")
+			status, exists := logMap[dateStr]
+			if !exists {
+				status = "belum_absen"
+			}
+
+			style := absenStyle
+			switch status {
+			case "hadir":
+				userHadir++
+				globalHadir++
+				style = hadirStyle
+			case "telat":
+				userTelat++
+				globalTelat++
+				style = telatStyle
+			case "alfa":
+				userAlfa++
+				globalAlfa++
+				style = absenStyle
+			case "sakit":
+				userSakit++
+				globalSakit++
+				style = sakitStyle
+			case "izin":
+				userIzin++
+				globalIzin++
+				style = sakitStyle
+			default:
+				globalBelum++
+			}
+
+			cell, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+			f.SetCellValue(sheet, cell, status)
+			f.SetCellStyle(sheet, cell, cell, style)
+			colIndex++
+		}
+
+		// Write user totals
+		cellHadir, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cellHadir, userHadir)
+		colIndex++
+
+		cellSakit, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cellSakit, userSakit)
+		colIndex++
+
+		cellIzin, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cellIzin, userIzin)
+		colIndex++
+
+		cellTelat, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cellTelat, userTelat)
+		colIndex++
+
+		cellAlfa, _ := excelize.CoordinatesToCellName(colIndex, rowIndex)
+		f.SetCellValue(sheet, cellAlfa, userAlfa)
+		colIndex++
+
+		rowIndex++
 	}
 
 	// =====================
@@ -116,22 +189,25 @@ func GenerateAttendanceExcel(kelas, jurusan, startDate, endDate string) (*exceli
 	f.NewSheet(summary)
 
 	f.SetCellValue(summary, "A1", "Total Hadir")
-	f.SetCellValue(summary, "B1", hadir)
+	f.SetCellValue(summary, "B1", globalHadir)
 
 	f.SetCellValue(summary, "A2", "Total Telat")
-	f.SetCellValue(summary, "B2", telat)
+	f.SetCellValue(summary, "B2", globalTelat)
 
 	f.SetCellValue(summary, "A3", "Total Alfa")
-	f.SetCellValue(summary, "B3", alfa)
+	f.SetCellValue(summary, "B3", globalAlfa)
 
 	f.SetCellValue(summary, "A4", "Total Sakit")
-	f.SetCellValue(summary, "B4", sakit)
+	f.SetCellValue(summary, "B4", globalSakit)
 
-	f.SetCellValue(summary, "A5", "Belum Absen")
-	f.SetCellValue(summary, "B5", belum)
+	f.SetCellValue(summary, "A5", "Total Izin")
+	f.SetCellValue(summary, "B5", globalIzin)
 
-	f.SetCellValue(summary, "A6", "Total Siswa")
-	f.SetCellValue(summary, "B6", len(rows))
+	f.SetCellValue(summary, "A6", "Belum Absen")
+	f.SetCellValue(summary, "B6", globalBelum)
+
+	f.SetCellValue(summary, "A7", "Total Siswa")
+	f.SetCellValue(summary, "B7", len(users))
 
 	return f, nil
 }

@@ -1,56 +1,33 @@
 package repo
 
 import (
-	"time"
-
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
+	"github.com/KicauOrgspark/BE-Absensi-Siswa/models"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/utils"
 )
 
-type ExportRow struct {
-	Nisn        string
-	FullName    string
-	ClassGroup  string
-	Status      *string
-	ClockInTime *time.Time
-}
-
-func GetAttendanceRows(kelas, jurusan, startDate, endDate string) ([]ExportRow, error) {
+func GetAttendanceRows(kelas, jurusan, startDate, endDate string) ([]models.Users, error) {
 
 	start, end, err := utils.DateRange(startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
 
-	var rows []ExportRow
+	var users []models.Users
 
-	db := database.DB.
-		Table("users u").
-		Select(`
-			u.nisn,
-			u.full_name,
-			u.class_group,
-			l.status,
-			l.clock_in_time
-		`).
-		Joins(`
-			LEFT JOIN (
-				SELECT user_id, status, clock_in_time
-				FROM attedance_logs
-				WHERE clock_in_time >= ? AND clock_in_time <= ?
-			) l ON l.user_id = u.id
-		`, start, end).
-		Where("u.role = ?", "siswa")
+	db := database.DB.Model(&models.Users{}).Where("role = ?", "siswa")
 
 	if kelas != "" {
-		db = db.Where("u.class_group = ?", kelas)
+		db = db.Where("class_group = ?", kelas)
 	}
 
 	if jurusan != "" {
-		db = db.Where("u.class_group LIKE ?", "%"+jurusan+"%")
+		db = db.Where("class_group LIKE ?", "%"+jurusan+"%")
 	}
 
-	err = db.Order("u.full_name ASC").Scan(&rows).Error
+	err = db.Preload("AttedanceLogs", "clock_in_time >= ? AND clock_in_time <= ?", start, end).
+		Order("full_name ASC").
+		Find(&users).Error
 
-	return rows, err
+	return users, err
 }
