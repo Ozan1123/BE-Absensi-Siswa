@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/database"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/dto/responses"
 	"github.com/KicauOrgspark/BE-Absensi-Siswa/mappers"
@@ -137,6 +139,8 @@ type MonthlyRecapData struct {
 }
 
 func GetMonthlyRecap(c *fiber.Ctx) error {
+	year := c.Query("year")
+
 	type DBRecap struct {
 		MonthKey  string `gorm:"column:month_key"`
 		MonthName string `gorm:"column:month_name"`
@@ -147,16 +151,26 @@ func GetMonthlyRecap(c *fiber.Ctx) error {
 
 	var dbRecaps []DBRecap
 
-	// MySQL specific date formatting
-	err := database.DB.Table("attedance_logs").
+	query := database.DB.Table("attedance_logs").
 		Select(`
 			DATE_FORMAT(clock_in_time, '%Y-%m') as month_key,
 			DATE_FORMAT(clock_in_time, '%b %y') as month_name,
 			SUM(CASE WHEN status IN ('hadir', 'telat') THEN 1 ELSE 0 END) as hadir,
 			SUM(CASE WHEN status = 'sakit' THEN 1 ELSE 0 END) as sakit,
 			SUM(CASE WHEN status = 'alfa' THEN 1 ELSE 0 END) as alfa
-		`).
-		Group("month_key, month_name").
+		`)
+
+	if year != "" {
+		var startYear, endYear int
+		_, err := fmt.Sscanf(year, "%d/%d", &startYear, &endYear)
+		if err == nil {
+			startDate := fmt.Sprintf("%d-07-01 00:00:00", startYear)
+			endDate := fmt.Sprintf("%d-06-30 23:59:59", endYear)
+			query = query.Where("clock_in_time >= ? AND clock_in_time <= ?", startDate, endDate)
+		}
+	}
+
+	err := query.Group("month_key, month_name").
 		Order("month_key ASC").
 		Limit(12).
 		Scan(&dbRecaps).Error

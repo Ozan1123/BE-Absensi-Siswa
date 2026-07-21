@@ -354,6 +354,8 @@ func LogoutWA(c *fiber.Ctx) error {
 func GetStudentsAttendanceToday(c *fiber.Ctx) error {
 	classFilter := c.Query("class_group")
 	statusFilter := c.Query("status")
+	angkatan := c.Query("angkatan")
+	jurusan := c.Query("jurusan")
 
 	loc, _ := time.LoadLocation("Asia/Jakarta")
 	now := time.Now().In(loc)
@@ -394,6 +396,22 @@ func GetStudentsAttendanceToday(c *fiber.Ctx) error {
 	// Filter per kelas
 	if classFilter != "" {
 		db = db.Where("u.class_group = ?", classFilter)
+	}
+
+	// Filter angkatan
+	if angkatan != "" {
+		if angkatan == "Kelas X" {
+			db = db.Where("u.class_group LIKE ?", "X-%")
+		} else if angkatan == "Kelas XI" {
+			db = db.Where("u.class_group LIKE ?", "XI-%")
+		} else if angkatan == "Kelas XII" {
+			db = db.Where("u.class_group LIKE ?", "XII-%")
+		}
+	}
+
+	// Filter jurusan
+	if jurusan != "" && jurusan != "Semua Jurusan" {
+		db = db.Where("u.class_group LIKE ?", "%"+jurusan+"%")
 	}
 
 	db = db.Order("u.class_group ASC, u.full_name ASC")
