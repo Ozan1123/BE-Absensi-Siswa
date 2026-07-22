@@ -296,25 +296,15 @@ func GetWAStatus(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /notification/wa/pair [post]
 func PairWA(c *fiber.Ctx) error {
-	var req requests.PairWAReq
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "payload tidak valid"})
-	}
-
-	if req.Phone == "" {
-		return c.Status(400).JSON(fiber.Map{"error": "phone wajib diisi (format: 628xxxxxxxxxx)"})
-	}
-
-	code, err := services.RequestPairingCode(req.Phone)
+	qr, err := services.StartQRPairing()
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	return c.JSON(fiber.Map{
-		"message":      "pairing code berhasil digenerate",
-		"pairing_code": code,
-		"instruction":  "Buka WhatsApp > Perangkat Tertaut > Tautkan Perangkat > Tautkan dengan nomor telepon > Masukkan kode",
-		"expires_in":   "3 menit",
+		"message": "QR Code berhasil digenerate",
+		"qr":      qr,
+		"status":  "pairing",
 	})
 }
 
@@ -460,8 +450,18 @@ func GetStudentsAttendanceToday(c *fiber.Ctx) error {
 		}
 
 		// Filter status jika diminta
-		if statusFilter != "" && status != statusFilter {
-			continue
+		if statusFilter != "" {
+			if statusFilter == "belum" || statusFilter == "belum_absen" {
+				if status != "belum_absen" {
+					continue
+				}
+			} else if statusFilter == "sakit" {
+				if status != "sakit" && status != "izin" {
+					continue
+				}
+			} else if status != statusFilter {
+				continue
+			}
 		}
 
 		switch status {

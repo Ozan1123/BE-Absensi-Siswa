@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -37,55 +37,37 @@ func InitWA() error {
 }
 
 func ConnectWA() error {
-	if WAClient.Store.ID == nil {
-		// Belum ada sesi tersimpan — pakai Pairing Code (OTP)
-		phone := NormalizePhone(os.Getenv("WA_PHONE"))
-		if phone == "" {
-			return fmt.Errorf("WA_PHONE belum diset di .env (format: 08xxx atau 628xxx)")
-		}
-
-		if err := WAClient.Connect(); err != nil {
-			return fmt.Errorf("gagal connect WA: %w", err)
-		}
-
-		// Tunggu sebentar supaya koneksi stabil sebelum request pairing code
-		time.Sleep(1 * time.Second)
-
-		log.Printf("[WA] Pairing dengan nomor: %s", phone)
-		code, err := WAClient.PairPhone(context.Background(), phone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
-		if err != nil {
-			return fmt.Errorf("gagal generate pairing code: %w", err)
-		}
-
-		log.Println("========================================")
-		log.Println("[WA] PAIRING CODE (masukkan di WhatsApp)")
-		log.Printf("[WA] Kode: %s", code)
-		log.Println("[WA] Buka WhatsApp > Perangkat Tertaut > Tautkan Perangkat > Tautkan dengan nomor telepon")
-		log.Println("========================================")
-
-		// Tunggu sampai pairing berhasil (max 3 menit)
-		timeout := time.After(3 * time.Minute)
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-timeout:
-				return fmt.Errorf("timeout menunggu pairing — coba jalankan ulang server")
-			case <-ticker.C:
-				if WAClient.Store.ID != nil {
-					log.Println("[WA] Pairing berhasil! Sesi tersimpan.")
-					return nil
-				}
-			}
-		}
-	} else {
-		if err := WAClient.Connect(); err != nil {
-			return fmt.Errorf("gagal reconnect WA: %w", err)
-		}
-		log.Println("[WA] Sesi tersimpan, berhasil terhubung kembali.")
+	if WAClient == nil {
+		return fmt.Errorf("WhatsApp client belum diinisialisasi")
 	}
+
+	if WAClient.Store.ID == nil {
+		log.Println("[WA] Belum ada sesi tersimpan. Siap melakukan pairing QR Code via Dashboard Admin.")
+		return nil
+	}
+
+	if err := WAClient.Connect(); err != nil {
+		return fmt.Errorf("gagal reconnect WA: %w", err)
+	}
+	log.Println("[WA] Sesi tersimpan, berhasil terhubung kembali.")
 	return nil
+}
+
+var (
+	currentQR      string
+	currentQRMutex sync.Mutex
+)
+
+func GetCurrentQR() string {
+	currentQRMutex.Lock()
+	defer currentQRMutex.Unlock()
+	return currentQR
+}
+
+func SetCurrentQR(qr string) {
+	currentQRMutex.Lock()
+	defer currentQRMutex.Unlock()
+	currentQR = qr
 }
 
 // GetWAStatus — cek status koneksi WhatsApp saat ini
@@ -94,6 +76,8 @@ func GetWAStatus() map[string]interface{} {
 		"connected":    false,
 		"has_session":  false,
 		"phone_number": "",
+		"phone":        "",
+		"qr":           GetCurrentQR(),
 	}
 
 	if WAClient == nil {
@@ -105,10 +89,13 @@ func GetWAStatus() map[string]interface{} {
 	status["connected"] = WAClient.IsConnected()
 
 	if WAClient.Store.ID != nil {
-		status["phone_number"] = WAClient.Store.ID.User
+		phone := WAClient.Store.ID.User
+		status["phone_number"] = phone
+		status["phone"] = phone
 		status["status"] = "connected"
-	} else if WAClient.IsConnected() {
-		status["status"] = "waiting_pair"
+		SetCurrentQR("")
+	} else if GetCurrentQR() != "" {
+		status["status"] = "pairing"
 	} else {
 		status["status"] = "disconnected"
 	}
@@ -116,8 +103,8 @@ func GetWAStatus() map[string]interface{} {
 	return status
 }
 
-// RequestPairingCode — generate pairing code baru untuk linking dari FE
-func RequestPairingCode(phone string) (string, error) {
+// StartQRPairing — generate QR code baru untuk scan WhatsApp Web dari FE
+func StartQRPairing() (string, error) {
 	if WAClient == nil {
 		return "", fmt.Errorf("WhatsApp belum diinisialisasi")
 	}
@@ -127,45 +114,44 @@ func RequestPairingCode(phone string) (string, error) {
 		return "", fmt.Errorf("WhatsApp sudah terhubung. Logout dulu jika ingin pair ulang")
 	}
 
-	// Pastikan client connect dulu
-	if !WAClient.IsConnected() {
-		if err := WAClient.Connect(); err != nil {
-			return "", fmt.Errorf("gagal connect WA: %w", err)
+	if WAClient.IsConnected() {
+		if qr := GetCurrentQR(); qr != "" {
+			return qr, nil
 		}
-		time.Sleep(1 * time.Second)
+		WAClient.Disconnect()
 	}
 
-	// Normalisasi nomor telepon sebelum pairing
-	phone = NormalizePhone(phone)
-
-	code, err := WAClient.PairPhone(context.Background(), phone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
+	qrChan, err := WAClient.GetQRChannel(context.Background())
 	if err != nil {
-		return "", fmt.Errorf("gagal generate pairing code: %w", err)
+		return "", fmt.Errorf("gagal mendapatkan QR channel: %w", err)
 	}
 
-	log.Printf("[WA] Pairing code baru di-generate untuk %s: %s", phone, code)
+	if err := WAClient.Connect(); err != nil {
+		return "", fmt.Errorf("gagal connect WA: %w", err)
+	}
 
-	// Monitor pairing di background
 	go func() {
-		timeout := time.After(3 * time.Minute)
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-timeout:
-				log.Println("[WA] Pairing code expired (3 menit).")
-				return
-			case <-ticker.C:
-				if WAClient.Store.ID != nil {
-					log.Println("[WA] Pairing berhasil via API! Sesi tersimpan.")
-					return
-				}
+		for item := range qrChan {
+			if item.Event == "code" {
+				SetCurrentQR(item.Code)
+				log.Printf("[WA] QR Code diterima: %s", item.Code)
+			} else if item.Event == "success" {
+				SetCurrentQR("")
+				log.Println("[WA] QR Pairing berhasil!")
+			} else {
+				log.Printf("[WA] QR Event: %s", item.Event)
 			}
 		}
 	}()
 
-	return code, nil
+	time.Sleep(1 * time.Second)
+	qr := GetCurrentQR()
+	return qr, nil
+}
+
+// RequestPairingCode — wrapper kompatibilitas ke StartQRPairing
+func RequestPairingCode(phone string) (string, error) {
+	return StartQRPairing()
 }
 
 // LogoutWA — disconnect dan hapus sesi WA, supaya bisa pair ulang
@@ -177,6 +163,8 @@ func LogoutWA() error {
 	if WAClient.Store.ID == nil {
 		return fmt.Errorf("tidak ada sesi WA yang aktif")
 	}
+
+	SetCurrentQR("")
 
 	// Logout dari WhatsApp server
 	if err := WAClient.Logout(context.Background()); err != nil {
