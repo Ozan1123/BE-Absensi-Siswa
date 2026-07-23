@@ -313,7 +313,7 @@ func GetActiveTokens(c *fiber.Ctx) error {
 			"token_code": token.TokenCode,
 
 			"qr_url": fmt.Sprintf(
-				"/api/v1/tokens/%d/image",
+				"/api/v1/token/%d/image",
 				token.ID,
 			),
 
