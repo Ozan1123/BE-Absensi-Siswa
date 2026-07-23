@@ -1,1 +1,25 @@
+# Environment files
 .env
+.env.local
+!.env.example
+
+# Binaries & Executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+server.exe
+tmp.exe
+
+# SQLite Databases & temporary files
+*.db
+*.db-journal
+*.sqlite
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+.idea/

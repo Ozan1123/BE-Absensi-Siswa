@@ -17,8 +17,13 @@ import (
 // Pendekatan ini menggantikan time.AfterFunc di memori, sehingga tahan terhadap server restart.
 func StartTokenCleaner() {
 	go func() {
-		for {
-			now := time.Now()
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			loc, _ := time.LoadLocation("Asia/Jakarta")
+			now := time.Now().In(loc)
+			startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 
 			// 1. Nonaktifkan token yang sudah expired
 			database.DB.
@@ -33,17 +38,22 @@ func StartTokenCleaner() {
 				Find(&unprocessedTokens)
 
 			for _, token := range unprocessedTokens {
-				log.Printf("[WA-CLEANER] Token %s (kategori: %s) expired & belum diproses — mendelegasikan broadcast notifikasi...",
-					token.TokenCode, token.Category)
+				// Hanya trigger broadcast/auto-alfa jika token berlaku pada hari ini
+				if !token.ValidUntil.Before(startOfDay) {
+					log.Printf("[WA-CLEANER] Token %s (kategori: %s) expired & belum diproses — mendelegasikan broadcast notifikasi...",
+						token.TokenCode, token.Category)
 
-				// Jalankan di background goroutine agar tidak menyumbat loop utama cleaner
-				go func(t models.AttedanceTokens) {
-					if t.Category == "hadir" {
-						NotifyPresentStudents(database.DB)
-					} else if t.Category == "telat" {
-						AutoAlfaAndNotify(database.DB)
-					}
-				}(token)
+					// Jalankan di background goroutine agar tidak menyumbat loop utama cleaner
+					go func(t models.AttedanceTokens) {
+						if t.Category == "hadir" {
+							NotifyPresentStudents(database.DB)
+						} else if t.Category == "telat" {
+							AutoAlfaAndNotify(database.DB)
+						}
+					}(token)
+				} else {
+					log.Printf("[WA-CLEANER] Token %s dari hari sebelumnya diabaikan (hanya ditandai processed).", token.TokenCode)
+				}
 
 				// Tandai token sebagai sudah diproses notifikasinya
 				database.DB.
@@ -51,11 +61,9 @@ func StartTokenCleaner() {
 					Where("id = ?", token.ID).
 					Update("notification_processed", true)
 
-				log.Printf("[WA-CLEANER] Token %s (kategori: %s) — broadcast notifikasi didelegasikan, ditandai processed.",
+				log.Printf("[WA-CLEANER] Token %s (kategori: %s) — ditandai processed.",
 					token.TokenCode, token.Category)
 			}
-
-			time.Sleep(1 * time.Minute) // cek tiap 1 menit
 		}
 	}()
 }
